@@ -1,3 +1,5 @@
+[![Code Issues](https://www.quantifiedcode.com/api/v1/project/bd0c238d3dd3406d8dc2d4a456a862e1/badge.svg)](https://www.quantifiedcode.com/app/project/bd0c238d3dd3406d8dc2d4a456a862e1)
+
 pyosci - manage data acquisition with Tectronix DPO 4104B
 =============================================================
 
