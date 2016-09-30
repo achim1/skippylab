@@ -24,8 +24,9 @@ setup(name='pyosci',
         "Topic :: Scientific/Engineering :: Physics"
               ],
       keywords=["oscilloscope", "daq",\
-                "TektronixDPO4104B", "readout"]
+                "TektronixDPO4104B", "Tektronix",\
+                "readout", "physics", "engineering"],
       packages=['pyosci'],
       #scripts=[],
-      package_data={'pyosci': ['plotting/default.mplstyle','present.mplstyle']}
+      package_data={'pyosci': ['pyoscidefault.mplstyle','pyoscipresent.mplstyle']}
       )
