@@ -3,6 +3,8 @@
 pyosci - manage data acquisition with Tectronix DPO 4104B
 =============================================================
 
+** use with python 3.5 **
+
 This package provides an interface to get data out of the 
 Tektronix DPO 4104B oscilloscope via a network connection.
 The scope's socket server is used for that.
@@ -21,7 +23,7 @@ Finding out the scope's IP adress
 Installation 
 --------------
 
-`pip install pyosci`
+`pip3 install pyosci`
 
 
 
@@ -61,7 +63,8 @@ Many commands are of the form getter/setter, like `DATa:STARt`
 can be issued in the form `DATa:STARt?` or `DATa:STARt 1000`.
 These getter/setters are modeled by python property objects.
 
-`def setget(cmd):
+```
+def setget(cmd):
     """
     Shortcut to construct property object to wrap getters and setters
     for a number of settings
@@ -75,10 +78,12 @@ These getter/setters are modeled by python property objects.
     """
     return property(lambda self: self.send(q(cmd)),\
                     lambda self, value: self.set(aarg(cmd,value)))
-`
+```
+
 This can be used to expand the functionality with such commands easily:
 
-`class TektronixDPO4104B(object):
+```
+class TektronixDPO4104B(object):
     """
     Oscilloscope of type DPO4104B manufactured by Tektronix
     """
@@ -87,7 +92,8 @@ This can be used to expand the functionality with such commands easily:
 
     mynewcommand = setget("COMMAND:COMMAND")
     
-`
+```
+
 And the command will be wrapped as a class attribute.
 
 
