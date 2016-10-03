@@ -2,11 +2,16 @@
 Use the scope as a DAQ
 
 """
-
+from . import osci
+from . import tools
+from . import commands as cmd
+from . import plotting
 
 import time
 import numpy as np
 import pylab as p
+
+from socket import timeout as TimeoutError
 
 bar_available = False
 
@@ -15,7 +20,6 @@ try:
     bar_available = True
 except ImportError:
     print ("No pyprind available")
-from socket import timeout as TimeoutError
 
 try:
     from functools import reduce
@@ -23,10 +27,7 @@ except ImportError:
     print ("Can not import functools, this might be python 2.7?")
 
 
-from osci import TektronixDPO4104B
-from tools import integrate_wf
-import commands as cmd
-import plotting
+
 
 ACQTIME = .2
 
@@ -43,7 +44,7 @@ class DAQ(object):
             ip (str):
             port (int):
         """
-        self.scope = TektronixDPO4104B(ip,port)
+        self.scope = osci.TektronixDPO4104B(ip,port)
         self._wf_header = None
 
         trials = 0
@@ -137,14 +138,16 @@ class DAQ(object):
                 # time.sleep(ACQTIME)
                 wf = self.scope.get_waveform()
                 # self.scope.acquire = cmd.SINGLE_ACQUIRE
-                if not (wf[0]*np.ones(len(wf)) - wf).sum() == 0: # flatline test
-                    if return_only_charge:
-                        wf = integrate_wf(header, wf)
+                if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
+                    continue # flatline test
 
-                    wforms.append(wf)
-                    acquired += 1
-                    if bar_available:
-                        bar.update()
+                if return_only_charge:
+                     wf = tools.integrate_wf(header, wf)
+
+                wforms.append(wf)
+                acquired += 1
+                if bar_available:
+                    bar.update()
 
                 #time.sleep(ACQTIME)
             except Exception as e:
@@ -309,17 +312,7 @@ class DAQ(object):
 
         p.show()
 
-    def get_SPE_response(self,n):
-        """
-        Acquire n waveforms and store the charge per wf
 
-        Args:
-             n (int):
-
-        Returns:
-
-        """
-        pass
 
 
 

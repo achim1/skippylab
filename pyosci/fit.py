@@ -17,7 +17,7 @@ import pylab as p
 
 
 PALETTE = sb.color_palette("dark")
-#p.style.use("present.mplstyle")
+p.style.use("pyoscipresent")
 
 
 def _gaussnorm(sigma, n):
@@ -111,10 +111,40 @@ def error_func(f, x, y_true, parameters):
 #mu_p, sigma_p, mu, sigma , lmbda
 
 
-def fit_model(xs, data, model, start_params, nbins=80):
+def fit_model(xs, data, model, start_params,  **kwargs):
+    """
+
+
+    Args:
+        histogram:
+        model:
+        start_params:
+        **kwargs: will be passed on to scipy.optimize.curve_fit
+
+    Keyword Args:
+        xerr (np.ndarray):
+
+    Returns:
+
+    """
+
     #mu_p, sigma_p, mu, sigma , lmbda
+    xerr = None
+    if "xerr" in kwargs:
+        xerr = kwargs.pop("xerr")
 
     print ("Using start params...", start_params)
+    #if fitrange is not None:
+    #    print ("Constraining fit to {}".format(fitrange))
+    #    fitrange = np.asarray(fitrange)
+    #    xs = xs[np.logical_and(xs >= fitrange[0], xs <= fitrange[1])]
+    #    data = data[np.logical_and(xs >= fitrange[0], xs <= fitrange[1])]
+
+    fitkwargs = {"maxfev" : 1000000, "xtol": 1e-10, "ftol": 1e-10}
+    if "bounds" in kwargs:
+        fitkwargs.pop("maxfev")
+        fitkwargs["max_nfev"] = 1000000
+    fitkwargs.update(kwargs)
     parameters, covariance_matrix = optimize.curve_fit(model,xs,\
                                                        data, p0=start_params,\
                                                        # bounds=(np.array([0, 0, 0, 0, 0] + [0]*len(start_params[5:])),\
@@ -122,9 +152,7 @@ def fit_model(xs, data, model, start_params, nbins=80):
                                                        # [np.inf]*len(start_params[5:]))),\
                                                        # max_nfev=100000)
                                                        # method="lm",\
-                                                       maxfev=1000000,\
-                                                       xtol=1e-10,\
-                                                       ftol=1e-10)
+                                                       **fitkwargs)
 
 
     print ("Fit yielded parameters", parameters)
@@ -136,6 +164,10 @@ def fit_model(xs, data, model, start_params, nbins=80):
 
     for i, d in enumerate(deviations):
         chisquare += d * d / model(xs[i],*parameters)
+    if xerr is not None:
+        chi_squared = np.sum(((model(xs, *parameters) - data) / xerr) ** 2)
+        reduced_chi_squared = (chi_squared) / (len(xs) - len(parameters))
+        print ("Obtanied chisquared/ndf of {:4.2f}".format(reduced_chi_squared))
 
     chisquare_ndf = chisquare/(len(xs) - len(parameters))
     print("Obtained chisquare of {:4.2f}".format(chisquare))

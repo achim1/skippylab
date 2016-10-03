@@ -5,11 +5,8 @@ Talk to Textronic scope via sockets
 import argparse
 import socket
 
-import commands as cmd
-from commands import decode as dec
-from commands import encode as enc
-from commands import add_arg as aarg
-from commands import query as q
+from . import commands as cmd
+
 import time
 import numpy as np
 
@@ -17,21 +14,26 @@ import logging
 
 from copy import copy
 
+# abbreviations
+dec = cmd.decode
+enc = cmd.encode
+aarg = cmd.add_arg
+q = cmd.query
 
-def setget(cmd):
+def setget(command):
     """
     Shortcut to construct property object to wrap getters and setters
     for a number of settings
 
     Args:
-        cmd (str): The command being used to get/set. Get will be a query
+        command (str): The command being used to get/set. Get will be a query
         value (str): The value to set
 
     Returns:
         property object
     """
-    return property(lambda self: self.send(q(cmd)),\
-                    lambda self, value: self.set(aarg(cmd,value)))
+    return property(lambda self: self.send(q(command)),\
+                    lambda self, value: self.set(aarg(command, value)))
 
 
 class TektronixDPO4104B(object):
@@ -56,6 +58,7 @@ class TektronixDPO4104B(object):
     histbox = setget(cmd.HISTBOX)
     histstart = setget(cmd.HISTSTART)
     histend = setget(cmd.HISTEND)
+    verbose = False
 
     @property
     def get_triggerrate(self):
@@ -124,7 +127,7 @@ class TektronixDPO4104B(object):
             self.connect_trials = 0
             raise socket.timeout
 
-        print ("Sending {}".format(enc(command)))
+        if self.verbose: print ("Sending {}".format(enc(command)))
         self._osock.send(enc(command))
         time.sleep(self.WAITTIME)
         try:
@@ -147,7 +150,7 @@ class TektronixDPO4104B(object):
         Returns:
             None
         """
-        print("Sending {}".format(enc(command)))
+        if self.verbose: print("Sending {}".format(enc(command)))
         self._osock.send(enc(command))
 
     def ping(self):
