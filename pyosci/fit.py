@@ -5,7 +5,9 @@ Provide routines for fitting charge histograms
 
 import numpy as np
 from scipy.misc import factorial
+
 from functools import reduce
+from copy import deepcopy as copy
 import scipy.optimize as optimize
 import seaborn.apionly as sb
 import dashi as d
@@ -19,18 +21,84 @@ import pylab as p
 PALETTE = sb.color_palette("dark")
 p.style.use("pyoscipresent")
 
+def reject_outliers(data, m=2):
+    """
+    A simple way to remove extreme outliers from data
 
-def _gaussnorm(sigma, n):
-    return 1 / (sigma * np.sqrt(2 * n * np.pi))
+    Args:
+        data (np.ndarray): data with outliers
+        m (int): number of standard deviations outside the
+                 data should be discarded
+
+    Returns:
+        np.ndarray
+    """
+
+    return data[abs(data - np.mean(data)) < m * np.std(data)]
+
+def calculate_chi_square(data, model_data):
+    """
+    Very simple estimator for goodness-of-fit. Use with care.
+    Non normalized bin counts are required.
+
+    Args:
+        data (np.ndarray): observed data (bincounts)
+        model_data (np.ndarray): model predictions for each bin
+
+    Returns:
+        np.ndarray
+    """
+
+    chi = ((data - model_data)**2/data)
+    return chi[np.isfinite(chi)].sum()
 
 
-def poisson(x, lmbda, k):
-    #k = int(k)
+def poisson(lmbda, k):
+    """
+    Poisson distribution
+
+    Args:
+        lmbda (int): expected number of occurences
+        k (int): measured number of occurences
+
+    Returns:
+        np.ndarrya
+    """
+
     return np.power(lmbda, k) * np.exp(-1 * lmbda) / factorial(k)
 
-
 def gauss(x, mu, sigma, n):
+    """
+    Returns a normed gaussian.
+
+    Args:
+        x (np.ndarray): x values
+        mu (float): Gauss mu
+        sigma (float): Gauss sigma
+        n:
+
+    Returns:
+
+    """
+
+    def _gaussnorm(sigma, n):
+        return 1 / (sigma * np.sqrt(2 * n * np.pi))
+
     return _gaussnorm(sigma, n) * np.exp(-np.power((x - (n * mu)), 2) / (2 * n * (sigma ** 2)))
+
+def calculate_sigma_from_amp(amp):
+    """
+    Get the sigma for the gauss from its peak value.
+    Gauss is normed
+
+    Args:
+        amp (float):
+
+    Returns:
+        float
+    """
+    return 1/(np.sqrt(2*np.pi)*amp)
+
 
 def charge_response_model(x,*params,return_ped=False):
     """
@@ -66,6 +134,20 @@ def charge_response_model(x,*params,return_ped=False):
         return firstmember, rest
     return result
 
+def exponential(x, N, n_noise):
+    """
+    An exponential model (for noise?)
+
+    Args:
+        x:
+        N:
+        n_noise:
+
+    Returns:
+        np.ndarray
+    """
+    return N * np.exp(-n_noise * x)
+
 def charge_response_with_noise(x, amp_p, mu_p, sigma_p, amp, mu, sigma, N, n_noise,\
                                return_components=False):
     """
@@ -93,52 +175,283 @@ def charge_response_with_noise(x, amp_p, mu_p, sigma_p, amp, mu, sigma, N, n_noi
         return pedestal, sp, noise*np.ones(len(x))
     return pedestal + sp + noise
 
-def error_func(f, x, y_true, parameters):
-    """
-    Get the errorfunction for a certain model
+#func is of type func(xs, *params)
 
-    Args:
-        f (func): the model
-        x (np.ndarray): x values to evaluete f
-        parameters (iterable): paramters for f
-        y_true (np.ndarray): true data
-
-    Returns:
-        func
+class Model(object):
     """
-    return f(x, *parameters) - y_true
+    Model holds theoretical prediction for
+    data. Can be used to fit data.
+
+    """
+
+
+    def __init__(self, func, startparams):
+        self._callbacks = [func]
+        self.startparams = [*startparams]
+        self.n_params = [len(startparams)]
+        self.best_fit_params = [*startparams]
+        self.coupling_variable = []
+        self.all_coupled = False
+        self.data = None
+        self.xs = None
+        self.chi2_ndf = None
+        self.prediction = lambda xs: reduce(lambda x, y: x + y,\
+                                  [f(xs) for f in self.components])
+
+    def couple_models(self, coupling_variable):
+        """
+        Couple the models by a variable, which means use the variable not
+        independently in all model components, but fit it only once.
+        E.g. if there are 3 models with parameters p1, p2, k each and they
+        are coupled by k, parameters p11, p21, p12, p22, and k will be fitted
+        instead of p11, p12, k1, p21, p22, k2.
+
+        Args:
+            coupling_variable: variable number of the number in startparams
+
+        Returns:
+            None
+        """
+        assert len(np.unique(self.n_params)) == 1,\
+            "Models have different numbers of parameters,difficult to couple!"
+
+        self.coupling_variable.append(coupling_variable)
+
+    def couple_all_models(self):
+        """
+        Use the first models startparams for
+        the combined model
+
+        Returns:
+            None
+        """
+        self.all_coupled = True
+
+
+    def __add__(self, other):
+        self._callbacks = self._callbacks + other._callbacks
+        self.startparams = self.startparams + other.startparams
+        self.n_params = self.n_params + other.n_params
+        self.best_fit_params = self.startparams
+        #self.best_fit_params = self.best_fit_params + other.best_fit_params
+        return self
+
+    @property
+    def components(self):
+        lastslice = 0
+        thecomponents = []
+        for i, cmp in enumerate(self._callbacks):
+            thisslice = slice(lastslice,self.n_params[i] + lastslice)
+            tmpcmp = copy(cmp)
+            #thecomponents.append(lambda xs: tmpcmp(xs, ),*self.best_fit_params[thisslice])
+            lastslice += self.n_params[i]
+            best_fit = self.best_fit_params[thisslice]
+            if self.all_coupled:
+                best_fit = self.best_fit_params[0:self.n_params[0]]
+            yield lambda xs: tmpcmp(xs, *best_fit)
+        return thecomponents
+
+    def __call__(self, xs, *params):
+        """
+        Give the model prediction
+
+
+        Args:
+            xs:
+
+        Returns:
+
+        """
+        thecomponents = []
+        firstparams = params[0:self.n_params[0]]
+        first = self._callbacks[0](xs, *firstparams)
+
+        lastslice = self.n_params[0]
+        for i, cmp in enumerate(self._callbacks[1:]):
+            thisslice = slice(lastslice, self.n_params[1:][i] + lastslice)
+            # tmpcmp = copy(cmp)
+            theparams = list(params[thisslice])
+            if self.coupling_variable:
+                for k in self.coupling_variable:
+                    theparams[k] = firstparams[k]
+            elif self.all_coupled:
+                theparams = firstparams
+            # thecomponents.append(lambda xs: tmpcmp(xs, *params[thisslice]))
+            lastslice += self.n_params[1:][i]
+            first += cmp(xs, *theparams)
+        return first
+
+
+    def add_data(self, data, nbins, subtract = None):
+        """
+        Add some data to the model, in preparation for the fit
+
+
+        Args:
+            data:
+            nbins:
+            subtract:
+
+        Returns:
+
+        """
+        bins = np.linspace(min(data), max(data), nbins)
+        self.data = d.factory.hist1d(data, bins).normalized(density=True)
+        self.xs = self.data.bincenters
+
+
+    def fit_to_data(self, data, nbins, subtract=None, **kwargs):
+        """
+        Apply this model to data
+
+        Args:
+            data (np.ndarray): the data, unbinned
+            nbins (int): number of bins to put the data in
+            subtract (func): subtract this from the data before fitting
+            **kwargs: will be passed on to scipy.optimize.curvefit
+
+        Returns:
+            None
+        """
+        def model(xs, *params):
+            thecomponents = []
+            firstparams = params[0:self.n_params[0]]
+            first = self._callbacks[0](xs, *firstparams)
+
+            lastslice = self.n_params[0]
+            for i, cmp in enumerate(self._callbacks[1:]):
+                thisslice = slice(lastslice, self.n_params[1:][i] + lastslice)
+                #tmpcmp = copy(cmp)
+                theparams = list(params[thisslice])
+                if self.coupling_variable:
+                    for k in self.coupling_variable:
+                        theparams[k] = firstparams[k]
+                elif self.all_coupled:
+                    theparams = firstparams
+                #thecomponents.append(lambda xs: tmpcmp(xs, *params[thisslice]))
+                lastslice += self.n_params[1:][i]
+                first += cmp(xs, *theparams)
+            return first
+
+        startparams = self.startparams
+        if self.all_coupled:
+            startparams = self.startparams[0:self.n_params[0]]
+        bins = np.linspace(min(data), max(data), nbins)
+        self.data = d.factory.hist1d(data, bins).normalized(density=True)
+        self.xs = self.data.bincenters
+
+        h = d.factory.hist1d(data, bins)
+        h_norm = h.normalized(density=True)
+        xs = h_norm.bincenters
+        data = self.data.bincontent
+        if subtract is not None:
+            data -= subtract(self.xs)
+
+        print("Using start params...", startparams)
+
+        fitkwargs = {"maxfev": 1000000, "xtol": 1e-10, "ftol": 1e-10}
+        if "bounds" in kwargs:
+            fitkwargs.pop("maxfev")
+            fitkwargs["max_nfev"] = 1000000
+        fitkwargs.update(kwargs)
+        parameters, covariance_matrix = optimize.curve_fit(model, self.xs, \
+                                                           data, p0=startparams, \
+                                                           # bounds=(np.array([0, 0, 0, 0, 0] + [0]*len(start_params[5:])),\
+                                                           # np.array([np.inf, np.inf, np.inf, np.inf, np.inf] +\
+                                                           # [np.inf]*len(start_params[5:]))),\
+                                                           # max_nfev=100000)
+                                                           # method="lm",\
+                                                           **fitkwargs)
+
+        print("Fit yielded parameters", parameters)
+        print("Covariance matrix", covariance_matrix)
+        print("##########################################")
+
+        # simple GOF
+        norm = h.bincontent / h_norm.bincontent
+        norm = norm[np.isfinite(norm)][0]
+        chi2 = (calculate_chi_square(h.bincontent, norm * model(h.bincenters, *parameters)))
+        self.chi2_ndf = chi2/nbins
+        print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
+        self.best_fit_params = parameters
+        return parameters
+
+
+        #self.best_fit_params = fit_model(data, nbins, model, startparams, **kwargs)
+
+    def clear(self):
+        """
+        Reset the model
+
+        Returns:
+            None
+        """
+        self.__init__(self._callbacks[0], self.startparams[:self.n_params])
+
+
+    def plot_result(self, ymin=1000, ylabel="normed bincount", xlabel="Q [C]", fig=None, mu_spe_is_par=0):
+        """
+        Show the fit result
+
+        Args:
+            ymin (float): limit the yrange
+            fig (pylab.figure): A figure instance
+            mu_spe_is_par (int): which one of the parameters is the mean of the spe peak?
+                                 (used for the info text)
+        Returns:
+            pylab.figure
+        """
+        if fig is None:
+            fig = p.figure()
+        ax = fig.gca()
+        self.data.scatter(color="k")
+        ax.plot(self.xs, self.prediction(self.xs), color=PALETTE[2])
+        for comp in self.components:
+            ax.plot(self.xs, comp(self.xs), linestyle=":", lw=1, color="k")
+
+        ax.set_yscale("log")
+        ax.set_ylim(ymin=ymin)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        infotext = r"\begin{tabular}{ll}"
+        infotext += r"$\chi^2/ndf$ & {:4.2f}\\".format(self.chi2_ndf)
+        infotext += r"entries& {}\\".format(self.data.stats.nentries)
+        infotext += r"$\mu_{{SPE}}$& {:4.2e}\\".format(self.best_fit_params[mu_spe_is_par])
+        infotext += r"\end{tabular}"
+        ax.text(0.9, 0.9, infotext,
+            horizontalalignment='center',
+            verticalalignment='center',
+            transform=ax.transAxes)
+        sb.despine()
+        return fig
+
 
 #mu_p, sigma_p, mu, sigma , lmbda
-
-
-def fit_model(xs, data, model, start_params,  **kwargs):
+def fit_model(data, nbins, model, start_params, **kwargs):
     """
 
 
     Args:
-        histogram:
-        model:
-        start_params:
+        data (np.ndarray):
+        nbins (int)
+        model (func):
+        start_params (tuple):
         **kwargs: will be passed on to scipy.optimize.curve_fit
 
     Keyword Args:
         xerr (np.ndarray):
 
     Returns:
-
+        tuple
     """
 
+    bins = np.linspace(min(data), max(data), nbins)
+    h = d.factory.hist1d(data,bins)
+    h_norm = h.normalized(density=True)
+    xs = h_norm.bincenters
+    data = h_norm.bincontent
     #mu_p, sigma_p, mu, sigma , lmbda
-    xerr = None
-    if "xerr" in kwargs:
-        xerr = kwargs.pop("xerr")
-
     print ("Using start params...", start_params)
-    #if fitrange is not None:
-    #    print ("Constraining fit to {}".format(fitrange))
-    #    fitrange = np.asarray(fitrange)
-    #    xs = xs[np.logical_and(xs >= fitrange[0], xs <= fitrange[1])]
-    #    data = data[np.logical_and(xs >= fitrange[0], xs <= fitrange[1])]
 
     fitkwargs = {"maxfev" : 1000000, "xtol": 1e-10, "ftol": 1e-10}
     if "bounds" in kwargs:
@@ -159,19 +472,11 @@ def fit_model(xs, data, model, start_params,  **kwargs):
     print ("Covariance matrix" , covariance_matrix)
     print ("##########################################")
 
-    chisquare = 0.
-    deviations = error_func(model, xs, data, parameters)
-
-    for i, d in enumerate(deviations):
-        chisquare += d * d / model(xs[i],*parameters)
-    if xerr is not None:
-        chi_squared = np.sum(((model(xs, *parameters) - data) / xerr) ** 2)
-        reduced_chi_squared = (chi_squared) / (len(xs) - len(parameters))
-        print ("Obtanied chisquared/ndf of {:4.2f}".format(reduced_chi_squared))
-
-    chisquare_ndf = chisquare/(len(xs) - len(parameters))
-    print("Obtained chisquare of {:4.2f}".format(chisquare))
-    print("Obtained chisquare/ndf of {:4.2f}".format(chisquare_ndf))
+    # simple GOF
+    norm = h.bincontent / h_norm.bincontent
+    norm = norm[np.isfinite(norm)][0]
+    chi2 = (calculate_chi_square(h.bincontent, norm * model(h.bincenters, *parameters)))
+    print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
     return parameters
 
 if __name__ == "__main__":

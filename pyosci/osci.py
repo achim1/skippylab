@@ -20,6 +20,7 @@ enc = cmd.encode
 aarg = cmd.add_arg
 q = cmd.query
 
+
 def setget(command):
     """
     Shortcut to construct property object to wrap getters and setters
@@ -63,10 +64,10 @@ class TektronixDPO4104B(object):
     @property
     def get_triggerrate(self):
         """
-        The rate the scope is tringgering
+        The rate the scope is triggering. This number is provided
+        by the scope. Most times it is nan though...
 
         Returns:
-
             float
         """
         trg_rate = self.send(cmd.TRG_RATEQ)
@@ -77,9 +78,7 @@ class TektronixDPO4104B(object):
             trg_rate = np.nan
         return
 
-
-    def __init__(self,ip="169.254.68.19",port=4000,\
-                 ):
+    def __init__(self,ip="169.254.68.19",port=4000):
         """
         Connect to the scope via its socket server
 

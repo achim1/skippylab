@@ -43,12 +43,12 @@ def plot_waveform(wf_header, wf_data,\
     ylabel = wf_header["yunit"]
     xs = copy(wf_header["xs"])
     ys = copy(wf_data)
-    if use_mv_and_ns:
-        if xlabel == "s" and ylabel == "V":
-           xs *= 1e9
-           ys *= 1e3
-           xlabel = "ns"
-           ylabel = "mV"
+
+    if xlabel == "s" and ylabel == "V" and use_mv_and_ns:
+        xs *= 1e9
+        ys *= 1e3
+        xlabel = "ns"
+        ylabel = "mV"
     ax.plot(xs, ys, color=color)
     ax.grid()
     sb.despine(fig)

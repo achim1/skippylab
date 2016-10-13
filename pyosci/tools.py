@@ -6,7 +6,7 @@ Convenient operations
 import numpy as np
 import scipy.integrate as integrate
 from scipy.constants import elementary_charge as ECHARGE
-
+                #time.sleep(ACQTIME)
 IMPEDANCE = 50
 
 def average_wf(waveforms):
@@ -25,7 +25,7 @@ def average_wf(waveforms):
 
     return wf0 / float(len(waveforms))
 
-def integrate_wf(header, waveform, method=integrate.simps):
+def integrate_wf(header, waveform, method=integrate.simps, impedance = IMPEDANCE):
     """
     Integrate a waveform to get the total charge
 
@@ -37,7 +37,7 @@ def integrate_wf(header, waveform, method=integrate.simps):
         float
     """
     integral = method(waveform, header["xs"], header["xincr"])
-    return integral
+    return integral/impedance
 
 def calculate_gain(header, waveform):
     """
@@ -65,11 +65,11 @@ def save_waveform(header, waveform, filename):
     Returns:
         None
     """
-    np.save((head, waveform), filename)
+    np.save(filename, (header, waveform))
     return None
 
 
-def load_waveform(filenaame):
+def load_waveform(filename):
     """
     load a waveform from a file
 
@@ -80,3 +80,4 @@ def load_waveform(filenaame):
         dict
     """
     head, wf = np.load(filename)
+    return head, wf

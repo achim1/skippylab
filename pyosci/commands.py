@@ -1,5 +1,6 @@
 """
-A namespace for oscilloscope string commands
+A namespace for oscilloscope string commands. The commands are send as ASCII
+to the scope using a socket connection
 """
 
 import enum
@@ -7,11 +8,14 @@ query = lambda cmd : cmd  + "?"
 
 def add_arg(cmd, arg):
     """
-    Add an argument to a command string
+    Add an argument to a command string. Concat the two.
 
     Args:
-        cmd (str)
-        arg (str)
+        cmd (str): The base command
+        arg (str): An argument
+
+    Returns:
+        str
     """
     if not isinstance(arg,str):
         arg = str(arg)
@@ -44,30 +48,34 @@ def concat(*cmd):
 
 def decode(response):
     """
-    Decode osciloscope response to a nice string
+    Decode osciloscope response from bytes to a string, cleaning
+    trailing EOL characters.
 
     Args:
         response (bytes): recieved from oscilloscope
+
+    Returns:
+        str
     """
     if response is None:
         return response
     if isinstance(response,bytes):
         response = response.decode("utf8")
     response = clean_response(response)
-    if not response or response == "\r\n" or response == "\n\r":
+    if response in [False, "\r\n", "\n\r"]:
         response = None
     return response
 
 
 def clean_response(response):
     """
-    Remove some remainders from the resulting scope response
+    Remove some EOL remainders from the resulting scope response
 
     Args:
         response (str): response from the scope
 
     Returns:
-
+        str
     """
 
     response = response.replace("\r\n>", "")
@@ -81,7 +89,8 @@ def clean_response(response):
 
 def parse_curve_data(header, curve):
     """
-    Make sense out of that what is returned by CURVE
+    Make sense out of that what is returned by CURVE. This works only
+    if the scope is set to return the data in ASCII, not binary.
 
     Args:
         header (dict): a parsed header
@@ -99,11 +108,15 @@ def parse_curve_data(header, curve):
 def encode(cmd):
     """
     Append trailing return carriage and convert
-    to bytes
+    to bytes. Trailing EOL characters are important
+    otherwise the scope will listen for input commands
+    endlessly.
 
     Args:
         cmd (str): command to be sanitized
 
+    Returns:
+        bytearray
     """
 
     if not cmd.endswith("\r\n"):
@@ -114,8 +127,9 @@ def encode(cmd):
 
 def histbox_coordinates(left, top, right, bottom):
     """
-    Create a string for the box cordinates for the
-    histo
+    Create a string for the box coordinates for the
+    histogram set up by the scope itself. The result
+    can be send to the scope to set the box.
 
     Args:
         left (int):
@@ -124,7 +138,7 @@ def histbox_coordinates(left, top, right, bottom):
         bottom (int):
 
     Returns:
-
+        str
     """
     command = concat([left, top, right, bottom])
     return command
@@ -155,7 +169,6 @@ def parse_custom_wf_header(head):
         except ValueError:
             continue
 
-
         # get rid of extra " in units
         parsed["xunit"] = parsed["xunit"].replace('"','')
         parsed["yunit"] = parsed["yunit"].replace('"', '')
@@ -164,7 +177,8 @@ def parse_custom_wf_header(head):
 
 #
 # COMMANDS!
-#
+# (add more here if needed. See the programming manual)
+# Queries should end with "Q"
 #
 
 WHOAMI = "*IDN?"
