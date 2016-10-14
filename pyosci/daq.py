@@ -69,6 +69,34 @@ class DAQ(object):
         #    self._wf_header = self.scope.get_wf_header()
         return self.scope.get_wf_header()
 
+    def set_acquisition_window_from_histbox(self):
+        """
+        Set the acquisition window for the waveforms
+        following the histogram box on the screen
+
+        Returns:
+            None
+        """
+        self.scope.data = cmd.SNAP
+        left, __, right, __ = self.scope.histbox.split(",")
+        left = float(left)
+        right = float(right)
+        head = self.scope.get_wf_header()
+        start, stop = 0, 0
+        for k, val in enumerate(head["xs"]):
+            if val >= left:
+                start = k
+                break
+
+        for j, val in enumerate(head["xs"]):
+            if val >= right:
+                stop = j
+                break
+        print (start, stop)
+        start += float(self.scope.data_start)
+        stop += start
+        print (start, stop)
+        self.set_acq_window(start, stop)
 
     def setup(self):
         """
@@ -95,6 +123,17 @@ class DAQ(object):
         self.scope.data_start = str(start)
         self.scope.data_stop = str(stop)
 
+    def get_acquisition_window(self):
+        """
+        Get the window the waveform is reconded in bins
+        from the osci
+
+        Returns:
+            tuple
+        """
+        start = self.scope.data_start
+        stop = self.scope.data_stop
+        return (int(start), int(stop))
 
     def acquire_waveform(self):
         """
@@ -109,7 +148,8 @@ class DAQ(object):
         return self.wf_header, wf
 
     def make_n_acquisitions(self, n, extra_timeout=.1,\
-                            trials=20, return_only_charge=False):
+                            trials=20, return_only_charge=False,\
+                            single_acquisition=True):
         """
         Acquire n waveforms
 
@@ -120,9 +160,10 @@ class DAQ(object):
             extra_timeout (float): Time between acquisitions
             trials (int): Set breaking condition when to abort acquisition
             return_only_charge (bool): don't get the wf, but only integrated charge instead
+            single_acquisition (bool): use the scopes single acquisition mode
 
         Returns:
-            tuple: header,[wf_1,wf_2,...]
+            list: [wf_1,wf_2,...]
 
         """
         wforms = list()
@@ -131,19 +172,26 @@ class DAQ(object):
         header = self.wf_header
         if bar_available:
             bar = pyprind.ProgBar(n, track_time=True, title='Acquiring waveforms...')
-
+        if single_acquisition:
+            self.scope.acquire_mode = cmd.RUN_SINGLE
+        else:
+            self.scope.acquire_mode = cmd.RUN_CONTINOUS
+            self.scope.acquire = cmd.ON
+        wf_buff = np.zeros(len(header["xs"]))
         while acquired < n:
             try:
                 # self.scope.acquire = cmd.SINGLE_ACQUIRE
                 # time.sleep(ACQTIME)
-                wf = self.scope.get_waveform()
+                wf = self.scope.get_waveform(single_acquisition=single_acquisition)
                 # self.scope.acquire = cmd.SINGLE_ACQUIRE
                 if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
                     continue # flatline test
-
+                if (wf - wf_buff).sum() == 0:
+                    continue # test if scope just returned the
+                             # same waveform again
                 if return_only_charge:
                      wf = tools.integrate_wf(header, wf)
-
+                wf_buff = wf
                 wforms.append(wf)
                 acquired += 1
                 if bar_available:
@@ -160,18 +208,6 @@ class DAQ(object):
         if bar_available:
             print (bar)
         return wforms
-
-    def get_acquisition_window(self):
-        """
-        Get the window the waveform is reconded in bins
-        from the osci
-
-        Returns:
-            tuple
-        """
-        start = self.scope.data_start
-        stop = self.scope.data_stop
-        return (int(start), int(stop))
 
     def find_best_acquisition_window(self, leading=20,trailing=40,waveforms=20, offset=-1):
         """
@@ -200,7 +236,7 @@ class DAQ(object):
         new_data_stop = data_stop
         min_found = False
         # buffer header
-        head = self.wf_header
+        head = self.scope.get_wf_header()
         wfmin = np.inf
         wfxmin = 0
         for xmin, val in enumerate(avg):

@@ -184,7 +184,6 @@ class Model(object):
 
     """
 
-
     def __init__(self, func, startparams):
         self._callbacks = [func]
         self.startparams = [*startparams]
@@ -226,7 +225,6 @@ class Model(object):
             None
         """
         self.all_coupled = True
-
 
     def __add__(self, other):
         self._callbacks = self._callbacks + other._callbacks
@@ -281,7 +279,6 @@ class Model(object):
             first += cmp(xs, *theparams)
         return first
 
-
     def add_data(self, data, nbins, subtract = None):
         """
         Add some data to the model, in preparation for the fit
@@ -298,7 +295,6 @@ class Model(object):
         bins = np.linspace(min(data), max(data), nbins)
         self.data = d.factory.hist1d(data, bins).normalized(density=True)
         self.xs = self.data.bincenters
-
 
     def fit_to_data(self, data, nbins, subtract=None, **kwargs):
         """
@@ -375,8 +371,6 @@ class Model(object):
         print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
         self.best_fit_params = parameters
         return parameters
-
-
         #self.best_fit_params = fit_model(data, nbins, model, startparams, **kwargs)
 
     def clear(self):
@@ -388,16 +382,16 @@ class Model(object):
         """
         self.__init__(self._callbacks[0], self.startparams[:self.n_params])
 
-
-    def plot_result(self, ymin=1000, ylabel="normed bincount", xlabel="Q [C]", fig=None, mu_spe_is_par=0):
+    def plot_result(self, ymin=1000, ylabel="normed bincount", xlabel="Q [C]", fig=None,\
+                    add_parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\",0))):
         """
         Show the fit result
 
         Args:
             ymin (float): limit the yrange
             fig (pylab.figure): A figure instance
-            mu_spe_is_par (int): which one of the parameters is the mean of the spe peak?
-                                 (used for the info text)
+            add_parameter_text (tuple): Display a parameter in the table on the plot
+                                        ((text, parameter_number), (text, parameter_number),...)
         Returns:
             pylab.figure
         """
@@ -416,7 +410,12 @@ class Model(object):
         infotext = r"\begin{tabular}{ll}"
         infotext += r"$\chi^2/ndf$ & {:4.2f}\\".format(self.chi2_ndf)
         infotext += r"entries& {}\\".format(self.data.stats.nentries)
-        infotext += r"$\mu_{{SPE}}$& {:4.2e}\\".format(self.best_fit_params[mu_spe_is_par])
+        if add_parameter_text is not None:
+            for partext in add_parameter_text:
+                print (partext[0])
+                print (partext[1])
+                infotext += partext[0].format(self.best_fit_params[partext[1]])
+            #infotext += r"$\mu_{{SPE}}$& {:4.2e}\\".format(self.best_fit_params[mu_spe_is_par])
         infotext += r"\end{tabular}"
         ax.text(0.9, 0.9, infotext,
             horizontalalignment='center',
@@ -424,7 +423,6 @@ class Model(object):
             transform=ax.transAxes)
         sb.despine()
         return fig
-
 
 #mu_p, sigma_p, mu, sigma , lmbda
 def fit_model(data, nbins, model, start_params, **kwargs):

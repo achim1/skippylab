@@ -9,6 +9,7 @@ from . import commands as cmd
 
 import time
 import numpy as np
+import vxi11
 
 import logging
 
@@ -76,7 +77,7 @@ class TektronixDPO4104B(object):
         # the IEEE Not A Number (NaN = 99.10E+36)
         if trg_rate > 1e35:
             trg_rate = np.nan
-        return
+        return trg_rate
 
     def __init__(self,ip="169.254.68.19",port=4000):
         """
@@ -89,14 +90,9 @@ class TektronixDPO4104B(object):
         self.ip = ip
         self.port = port
         self.connect_trials = 0
-        #socket.setdefaulttimeout(5.)
-        #sock  = socket.socket(type=socket.SOCK_STREAM)
-        #sock.connect((ip,port))
-        #self._osock = sock
         self.wf_buff_header = None # store a waveform header in case they are all the same
-        self._osock = socket.create_connection((ip,port),self.SOCK_TIMEOUT)
-        #trash = self._osock.recv(1024) #throw away intro if in terminal mode
-        #del trash
+        #self._osock = socket.create_connection((ip,port),self.SOCK_TIMEOUT)
+        self.instrument = vxi11.Instrument(ip)
 
     #def __del__(self):
     #    """
@@ -111,11 +107,13 @@ class TektronixDPO4104B(object):
         Returns:
             None
         """
-        self._osock = socket.create_connection((self.ip, self.port), self.SOCK_TIMEOUT)
+        #self._osock = socket.create_connection((self.ip, self.port), self.SOCK_TIMEOUT)
+        self.instrument = vxi11.Instrument(self.ip)
 
     def send(self,command,buffsize=2**16):
         """
-        Send command to the scope
+        Send command to the scope. Raises socket.timeout error if
+        it had failed too often
 
         Args:
             command (str): command to be sent to the 
@@ -127,15 +125,23 @@ class TektronixDPO4104B(object):
             raise socket.timeout
 
         if self.verbose: print ("Sending {}".format(enc(command)))
-        self._osock.send(enc(command))
-        time.sleep(self.WAITTIME)
         try:
-            response = self._osock.recv(buffsize)
-        except socket.timeout:
-            self.connect_trials += 1
+            response = self.instrument.ask(command)
+        except Exception as e:
             self.reopen_socket()
-            time.sleep(self.WAITTIME)
-            response = self.send(command)
+            response = self.instrument.ask(command)
+            self.connect_trials += 1
+
+        return response
+        #self._osock.send(enc(command))
+        #time.sleep(self.WAITTIME)
+        #try:
+        #    response = self._osock.recv(buffsize)
+        #except socket.timeout:
+        #    self.connect_trials += 1
+        #    self.reopen_socket()
+        #    time.sleep(self.WAITTIME)
+        #    response = self.send(command)
 
         return dec(response)
 
@@ -150,7 +156,8 @@ class TektronixDPO4104B(object):
             None
         """
         if self.verbose: print("Sending {}".format(enc(command)))
-        self._osock.send(enc(command))
+        self.instrument.write(command)
+        #self._osock.send(enc(command))
 
     def ping(self):
         """
@@ -204,7 +211,7 @@ class TektronixDPO4104B(object):
         xs = np.ones(header["npoints"])*header["xzero"]
 
         # relative timing?
-        xs = np.zeros(header["npoints"])
+        xs = np.zeros(int(header["npoints"]))
         # FIXME: There must be a better way
         for i in range(int(header["npoints"])):
             xs[i] += i*header["xincr"]
@@ -212,15 +219,25 @@ class TektronixDPO4104B(object):
         header["xs"] = xs
         return header
 
-    def get_waveform(self):
+    def get_waveform(self, single_acquisition=False):
         """
-        Get a waveform from the scope
-        """
+        Get the waveform data
 
+
+        Args:
+            single_acquire: use single acquition mode
+
+        Returns:
+
+        """
+        #self.acquire_mode = cmd.SINGLE_ACQUIRE
+        if single_acquisition: self.acquire = cmd.ON
         waveform = self.send(cmd.CURVE)
+        if single_acquisition: self.acquire = cmd.OFF
+        #self.get_wf_header()
         waveform = np.array([float(k) for k in waveform.split(",")])
         if self.wf_buff_header is None:
-            self.get_wf_header()
+           self.get_wf_header()
 
         # from the docs
         # Value in YUNit units = ((curve_in_dl - YOFf) * YMUlt) + YZEro
