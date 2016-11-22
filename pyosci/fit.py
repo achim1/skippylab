@@ -11,6 +11,10 @@ from copy import deepcopy as copy
 import scipy.optimize as optimize
 import seaborn.apionly as sb
 import dashi as d
+
+from . import tools
+from . import plotting as plt
+
 from scipy.constants import elementary_charge as ELEMENTARY_CHARGE
 d.visual()
 
@@ -197,6 +201,7 @@ class Model(object):
         self.prediction = lambda xs: reduce(lambda x, y: x + y,\
                                   [f(xs) for f in self.components])
 
+
     def couple_models(self, coupling_variable):
         """
         Couple the models by a variable, which means use the variable not
@@ -225,6 +230,8 @@ class Model(object):
             None
         """
         self.all_coupled = True
+        # if self.all_coupled:
+        startparams = self.startparams[0:self.n_params[0]]
 
     def __add__(self, other):
         self._callbacks = self._callbacks + other._callbacks
@@ -330,8 +337,8 @@ class Model(object):
             return first
 
         startparams = self.startparams
-        if self.all_coupled:
-            startparams = self.startparams[0:self.n_params[0]]
+        #if self.all_coupled:
+        #    startparams = self.startparams[0:self.n_params[0]]
         bins = np.linspace(min(data), max(data), nbins)
         self.data = d.factory.hist1d(data, bins).normalized(density=True)
         self.xs = self.data.bincenters
@@ -425,7 +432,7 @@ class Model(object):
         return fig
 
 #mu_p, sigma_p, mu, sigma , lmbda
-def fit_model(data, nbins, model, start_params, **kwargs):
+def fit_model_deprecated(data, nbins, model, start_params, **kwargs):
     """
 
 
@@ -476,6 +483,43 @@ def fit_model(data, nbins, model, start_params, **kwargs):
     chi2 = (calculate_chi_square(h.bincontent, norm * model(h.bincenters, *parameters)))
     print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
     return parameters
+
+
+def fit_model(waveformfile, model, startparams, \
+              rej_outliers=True, nbins=200, \
+              parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\", 5),), **kwargs):
+    """
+    Standardazied fitting routine
+
+    Args:
+        waveformfile (str): full path to a file with waveforms saved by pyosci
+        model (pyosci.fit.Model): A model to fit to the data
+        startparams (tuple): initial parameters to model
+
+    Keyword Args:
+        rej_outliers (bool): Remove extreme outliers from data
+        nbins (int): Number of bins
+        parameter_text (tuple): will be passed to model.plot_result
+    Returns:
+        tuple
+    """
+    head, wf = tools.load_waveform(waveformfile)
+    plt.plot_waveform(head, tools.average_wf(wf))
+    charges = 1e12 * np.array([-1 * tools.integrate_wf(head, w) for w in wf])
+    # charges += np.ones(len(charges))
+    if rej_outliers:
+        charges = reject_outliers(charges)
+    model.startparams = startparams
+    model.fit_to_data(charges, nbins, **kwargs)
+    fig = model.plot_result(ymin=1e-4, \
+                            add_parameter_text=parameter_text, \
+                            xlabel=r"$Q$ [pC]")
+    if hasattr(model, "parameter_names"):
+        pretty_pars = [k for k in zip(model.parameter_names, model.best_fit_params)]
+    print("Best fit parameters {}".format(model.best_fit_params))
+    ax = fig.gca()
+    ax.grid(1)
+    return ax, model
 
 if __name__ == "__main__":
 

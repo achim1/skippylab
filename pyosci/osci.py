@@ -197,9 +197,12 @@ class TektronixDPO4104B(object):
         bincenters = r_binedges + (r_binedges - l_binedges)/2.
         return bincenters, bincontent 
 
-    def get_wf_header(self):
+    def get_wf_header(self, absolute_timing=False):
         """
         Get some meta information about the *next incoming wavefrm*
+
+        Keyword Args:
+            absolute_timing (bool): header["xs"] starts with header["xzero"], 0 otherwiese
 
         Returns:
             dict
@@ -208,10 +211,11 @@ class TektronixDPO4104B(object):
         header = cmd.parse_custom_wf_header(header)
         self.wf_buff_header = header
         #header["xs"] = np.ones(len(header["npoints"]))*header["xzero"]
-        xs = np.ones(header["npoints"])*header["xzero"]
-
-        # relative timing?
-        xs = np.zeros(int(header["npoints"]))
+        if absolute_timing:
+            xs = np.ones(header["npoints"])*header["xzero"]
+        else:
+            # relative timing?
+            xs = np.zeros(int(header["npoints"]))
         # FIXME: There must be a better way
         for i in range(int(header["npoints"])):
             xs[i] += i*header["xincr"]

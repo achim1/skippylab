@@ -79,19 +79,24 @@ class DAQ(object):
         """
         self.scope.data = cmd.SNAP
         left, __, right, __ = self.scope.histbox.split(",")
+        print (left)
+        print (right)
         left = float(left)
         right = float(right)
-        head = self.scope.get_wf_header()
+        head = self.scope.get_wf_header(absolute_timing=True)
         start, stop = 0, 0
-        for k, val in enumerate(head["xs"]):
+        xs = head["xs"] + head["xzero"]
+        print (xs)
+        for k, val in enumerate(xs):
             if val >= left:
                 start = k
                 break
 
-        for j, val in enumerate(head["xs"]):
+        for j, val in enumerate(xs):
             if val >= right:
                 stop = j
                 break
+
         print (start, stop)
         start += float(self.scope.data_start)
         stop += start
@@ -272,10 +277,6 @@ class DAQ(object):
         #new_data_start -= ((1e-9)*leading/head["xincr"])
         #new_data_stop += ((1e-9)*trailing/head["xincr"])
 
-        print ("Will set new acquisition window to {} {}"\
-               .format(new_data_start, new_data_stop))
-        self.scope.data_start = new_data_start
-        self.scope.data_stop = new_data_stop
 
         fig = plotting.plot_waveform(head,avg)
         #fig = plotting.plot_waveform(head, threshold, fig=fig)
@@ -291,9 +292,26 @@ class DAQ(object):
 
         #plot_data_min = wf_re - ((1e-9) * leading)
         #plot_data_max = wf_fe + ((1e-9) * trailing)
+        print (new_data_start)
+        print (new_data_stop)
+        print (len(head["xs"]))
+        print (data_start)
+        print (data_stop)
+        xminline = 0
+        xmaxline = -1
+        if new_data_start >= data_start:
+            xminline = new_data_start - data_stop
+        if new_data_stop <= data_stop:
+            xmaxline = new_data_stop - data_stop
 
-        ax.vlines(head["xs"][new_data_start - data_start]*1e9, ax.get_ylim()[0], ax.get_ylim()[1])
-        ax.vlines(head["xs"][new_data_stop - data_start]*1e9, ax.get_ylim()[0], ax.get_ylim()[1])
+        ax.vlines(head["xs"][xminline]*1e9, ax.get_ylim()[0], ax.get_ylim()[1])
+        ax.vlines(head["xs"][xmaxline]*1e9, ax.get_ylim()[0], ax.get_ylim()[1])
+
+        print ("Will set new acquisition window to {} {}"\
+               .format(new_data_start, new_data_stop))
+        self.scope.data_start = new_data_start
+        self.scope.data_stop = new_data_stop
+
         p.show()
 
     def get_average_waveform(self,n=10):

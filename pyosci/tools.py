@@ -6,7 +6,8 @@ Convenient operations
 import numpy as np
 import scipy.integrate as integrate
 from scipy.constants import elementary_charge as ECHARGE
-                #time.sleep(ACQTIME)
+from copy import deepcopy as copy
+
 IMPEDANCE = 50
 
 def average_wf(waveforms):
@@ -19,7 +20,7 @@ def average_wf(waveforms):
     Returns:
         np.ndarray
     """
-    wf0 = waveforms[0]
+    wf0 = copy(waveforms[0])
     for wf in waveforms[1:]:
         wf0 += wf
 
