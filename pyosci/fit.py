@@ -8,6 +8,8 @@ from scipy.misc import factorial
 
 from functools import reduce
 from copy import deepcopy as copy
+from collections import namedtuple
+
 import scipy.optimize as optimize
 import seaborn.apionly as sb
 import dashi as d
@@ -21,6 +23,10 @@ d.visual()
 import sys
 import pylab as p
 
+try:
+    from iminuit import Minuit
+except ImportError:
+    print ("WARNING, can not load iminuit")
 
 PALETTE = sb.color_palette("dark")
 p.style.use("pyoscipresent")
@@ -303,13 +309,14 @@ class Model(object):
         self.data = d.factory.hist1d(data, bins).normalized(density=True)
         self.xs = self.data.bincenters
 
-    def fit_to_data(self, data, nbins, subtract=None, **kwargs):
+    def fit_to_data(self, data, nbins, silent=False, subtract=None, **kwargs):
         """
         Apply this model to data
 
         Args:
             data (np.ndarray): the data, unbinned
             nbins (int): number of bins to put the data in
+            silent (bool): silence output
             subtract (func): subtract this from the data before fitting
             **kwargs: will be passed on to scipy.optimize.curvefit
 
@@ -350,7 +357,7 @@ class Model(object):
         if subtract is not None:
             data -= subtract(self.xs)
 
-        print("Using start params...", startparams)
+        if not silent: print("Using start params...", startparams)
 
         fitkwargs = {"maxfev": 1000000, "xtol": 1e-10, "ftol": 1e-10}
         if "bounds" in kwargs:
@@ -366,16 +373,16 @@ class Model(object):
                                                            # method="lm",\
                                                            **fitkwargs)
 
-        print("Fit yielded parameters", parameters)
-        print("Covariance matrix", covariance_matrix)
-        print("##########################################")
+        if not silent: print("Fit yielded parameters", parameters)
+        if not silent: print("Covariance matrix", covariance_matrix)
+        if not silent: print("##########################################")
 
         # simple GOF
         norm = h.bincontent / h_norm.bincontent
         norm = norm[np.isfinite(norm)][0]
         chi2 = (calculate_chi_square(h.bincontent, norm * model(h.bincenters, *parameters)))
         self.chi2_ndf = chi2/nbins
-        print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
+        if not silent: print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
         self.best_fit_params = parameters
         return parameters
         #self.best_fit_params = fit_model(data, nbins, model, startparams, **kwargs)
@@ -390,7 +397,7 @@ class Model(object):
         self.__init__(self._callbacks[0], self.startparams[:self.n_params])
 
     def plot_result(self, ymin=1000, ylabel="normed bincount", xlabel="Q [C]", fig=None,\
-                    add_parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\",0))):
+                    add_parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\",0),)):
         """
         Show the fit result
 
@@ -487,7 +494,9 @@ def fit_model_deprecated(data, nbins, model, start_params, **kwargs):
 
 def fit_model(waveformfile, model, startparams, \
               rej_outliers=True, nbins=200, \
-              parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\", 5),), **kwargs):
+              parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\", 5),),
+              use_minuit=False,
+              **kwargs):
     """
     Standardazied fitting routine
 
@@ -500,6 +509,8 @@ def fit_model(waveformfile, model, startparams, \
         rej_outliers (bool): Remove extreme outliers from data
         nbins (int): Number of bins
         parameter_text (tuple): will be passed to model.plot_result
+        use_miniuit (bool): use minuit to minimize startparams for best 
+                            chi2
     Returns:
         tuple
     """
@@ -509,17 +520,48 @@ def fit_model(waveformfile, model, startparams, \
     # charges += np.ones(len(charges))
     if rej_outliers:
         charges = reject_outliers(charges)
-    model.startparams = startparams
-    model.fit_to_data(charges, nbins, **kwargs)
+    if use_minuit:
+        from iminuit import Minuit
+        def do_min(a, b, c, d, e, f, g, h, i, j, k): #FIXME!!!
+            model.startparams = (a, b, c, d, e, f, g, h, i, j, k)
+            model.fit_to_data(charges, nbins, silent=True, **kwargs)
+            return model.chi2_ndf
+        if "bounds" in kwargs: 
+            bnd = kwargs["bounds"]
+            m = Minuit(do_min, limit_a=(bnd[0][0],bnd[1][0]),
+                               limit_b=(bnd[0][1],bnd[1][1]),     
+                               limit_c=(bnd[0][2],bnd[1][2]),     
+                               limit_d=(bnd[0][3],bnd[1][3]),     
+                               limit_e=(bnd[0][4],bnd[1][4]),     
+                               limit_f=(bnd[0][5],bnd[1][5]),     
+                               limit_g=(bnd[0][6],bnd[1][6]),     
+                               limit_h=(bnd[0][7],bnd[1][7]),     
+                               limit_i=(bnd[0][8],bnd[1][8]),     
+                               limit_j=(bnd[0][9],bnd[1][9]), 
+                               limit_k=(bnd[0][10],bnd[1][10]))   
+        else:
+            m = Minuit(do_min)
+        # hand over the startparams
+        for key, value in zip(["a","b","c","d","e","f","g","h","i","j"], startparams):
+            m.values[key] = value
+        m.migrad()
+    else:
+        model.startparams = startparams
+        model.fit_to_data(charges, nbins, **kwargs)
     fig = model.plot_result(ymin=1e-4, \
                             add_parameter_text=parameter_text, \
                             xlabel=r"$Q$ [pC]")
     if hasattr(model, "parameter_names"):
         pretty_pars = [k for k in zip(model.parameter_names, model.best_fit_params)]
-    print("Best fit parameters {}".format(model.best_fit_params))
+    if hasattr(startparams, "_make"): # duck typing
+        best_fit_params = startparams._make(model.best_fit_params)
+    else:
+        best_fit_params = model.best_fit_params
+    print("Best fit parameters {}".format(best_fit_params))
     ax = fig.gca()
     ax.grid(1)
     return ax, model
+
 
 if __name__ == "__main__":
 
