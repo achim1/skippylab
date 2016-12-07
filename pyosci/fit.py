@@ -1,8 +1,9 @@
 """
 Provide routines for fitting charge histograms
-
 """
 
+import sys
+import pylab as p
 import numpy as np
 from scipy.misc import factorial
 
@@ -20,16 +21,48 @@ from . import plotting as plt
 from scipy.constants import elementary_charge as ELEMENTARY_CHARGE
 d.visual()
 
-import sys
-import pylab as p
-
 try:
     from iminuit import Minuit
 except ImportError:
     print ("WARNING, can not load iminuit")
 
+# default color palette
 PALETTE = sb.color_palette("dark")
 p.style.use("pyoscipresent")
+
+
+def get_n_hit(charges, nbins):
+    """
+    Identify how many events are in the pedestal
+
+    Args:
+        charges (np.ndarray): The measured charges
+        pedestal_model (fit.Model): A model to fit for the pedestal
+
+    Returns:
+        tuple (n_hit, n_all)
+    """
+    one_gauss = lambda x, n, y, z: n * gauss(x, y, z, 1)
+    ped_mod = Model(one_gauss, (1000, -.1, 1))
+    ped_mod.fit_to_data(charges, nbins, normalize=False, silent=False)
+
+    n_hit = abs(ped_mod.data.bincontent - ped_mod.prediction(ped_mod.xs)).sum()
+    n_pedestal = ped_mod.data.stats.nentries - n_hit
+    n_all = ped_mod.data.stats.nentries
+    return n_hit, n_all
+
+
+def calculate_mu(charges, nbins):
+    """
+    Calculate mu out of
+    P(hit) = (N_hit/N_all) = exp(QExCExLY)
+    where P is the probability for a hit, QE is quantum efficiency, CE is
+    """
+    n_hit, n_all = get_n_hit(charges, nbins)
+    n_pedestal = n_all - n_hit
+    mu = -1 * np.log(n_pedestal / n_all)
+    return mu
+
 
 def reject_outliers(data, m=2):
     """
@@ -45,6 +78,7 @@ def reject_outliers(data, m=2):
     """
 
     return data[abs(data - np.mean(data)) < m * np.std(data)]
+
 
 def calculate_chi_square(data, model_data):
     """
@@ -77,6 +111,7 @@ def poisson(lmbda, k):
 
     return np.power(lmbda, k) * np.exp(-1 * lmbda) / factorial(k)
 
+
 def gauss(x, mu, sigma, n):
     """
     Returns a normed gaussian.
@@ -96,6 +131,7 @@ def gauss(x, mu, sigma, n):
 
     return _gaussnorm(sigma, n) * np.exp(-np.power((x - (n * mu)), 2) / (2 * n * (sigma ** 2)))
 
+
 def calculate_sigma_from_amp(amp):
     """
     Get the sigma for the gauss from its peak value.
@@ -109,40 +145,6 @@ def calculate_sigma_from_amp(amp):
     """
     return 1/(np.sqrt(2*np.pi)*amp)
 
-
-def charge_response_model(x,*params,return_ped=False):
-    """
-    A combination of gaussian weighted by the poisson probability to measure zero
-
-    Args:
-        x:
-        params (tuple):  mu_p, sigma_p, mu, sigma, lmbda, w1...wn
-
-    Keyword Args:
-        n_max (int): max number of gaussians to sum up
-
-    Returns:
-        np.ndarray
-    """
-    #print (params)
-    n_max = len(params[5:])
-    mu_p = params[0]
-    sigma_p = params[1]
-    mu = params[2]
-    sigma = params[3]
-    lmbda = params[4]
-    weights = params[5:]
-    #weights = np.ones(len(params[5:]))
-    #print weights
-    firstmember = weights[0]*poisson(x,lmbda,0)*gauss(x, mu_p, sigma_p, 1)
-    rest = [weights[n-1]*poisson(x, mu, n)*gauss(x, mu, sigma, n) for n in range(1, len(params[5:]))]
-    try:
-        result = reduce(lambda x, y: x+y, rest) + firstmember
-    except TypeError:
-        result = weights[0]*poisson(x, mu, 1)*gauss(x, mu, sigma, 1) + firstmember
-    if return_ped:
-        return firstmember, rest
-    return result
 
 def exponential(x, N, n_noise):
     """
@@ -158,34 +160,6 @@ def exponential(x, N, n_noise):
     """
     return N * np.exp(-n_noise * x)
 
-def charge_response_with_noise(x, amp_p, mu_p, sigma_p, amp, mu, sigma, N, n_noise,\
-                               return_components=False):
-    """
-    A different charge response model attributing an exponential dropping noise term
-
-    Args:
-        x:
-        mu_p:
-        sigma_p:
-        mu:
-        sigma:
-        N:
-        n_noise:
-
-    Keyword Args:
-        return_components (bool):
-
-    Returns:
-
-    """
-    pedestal = gauss(x, mu_p, sigma_p,1)
-    sp = amp*gauss(x, mu, sigma,1)
-    noise = N*np.exp(-n_noise*x)
-    if return_components:
-        return pedestal, sp, noise*np.ones(len(x))
-    return pedestal + sp + noise
-
-#func is of type func(xs, *params)
 
 class Model(object):
     """
@@ -194,7 +168,13 @@ class Model(object):
 
     """
 
-    def __init__(self, func, startparams):
+    def __init__(self, func, startparams=None):
+
+        # if no startparams are given, construct 
+        # and initialize with 0es.
+        # FIXME: better estimate?
+        if startparams is None:
+            startparams = [0]*func.__code__.co_argcount
         self._callbacks = [func]
         self.startparams = [*startparams]
         self.n_params = [len(startparams)]
@@ -204,9 +184,10 @@ class Model(object):
         self.data = None
         self.xs = None
         self.chi2_ndf = None
+        self.chi2_ndf_components = []
+        self.norm = None
         self.prediction = lambda xs: reduce(lambda x, y: x + y,\
                                   [f(xs) for f in self.components])
-
 
     def couple_models(self, coupling_variable):
         """
@@ -244,7 +225,7 @@ class Model(object):
         self.startparams = self.startparams + other.startparams
         self.n_params = self.n_params + other.n_params
         self.best_fit_params = self.startparams
-        #self.best_fit_params = self.best_fit_params + other.best_fit_params
+        # self.best_fit_params = self.best_fit_params + other.best_fit_params
         return self
 
     @property
@@ -266,12 +247,11 @@ class Model(object):
         """
         Give the model prediction
 
-
         Args:
-            xs:
+            xs (np.ndaarray): the values the model should be evaluated on
 
         Returns:
-
+            np.ndarray
         """
         thecomponents = []
         firstparams = params[0:self.n_params[0]]
@@ -309,7 +289,8 @@ class Model(object):
         self.data = d.factory.hist1d(data, bins).normalized(density=True)
         self.xs = self.data.bincenters
 
-    def fit_to_data(self, data, nbins, silent=False, subtract=None, **kwargs):
+    def fit_to_data(self, data, nbins, silent=False, subtract=None,\
+                    normalize=True, **kwargs):
         """
         Apply this model to data
 
@@ -318,6 +299,7 @@ class Model(object):
             nbins (int): number of bins to put the data in
             silent (bool): silence output
             subtract (func): subtract this from the data before fitting
+            normalize (bool): normalize data before fitting
             **kwargs: will be passed on to scipy.optimize.curvefit
 
         Returns:
@@ -347,7 +329,9 @@ class Model(object):
         #if self.all_coupled:
         #    startparams = self.startparams[0:self.n_params[0]]
         bins = np.linspace(min(data), max(data), nbins)
-        self.data = d.factory.hist1d(data, bins).normalized(density=True)
+        self.data = d.factory.hist1d(data, bins)
+        if normalize:
+            self.data = self.data.normalized(density=True)
         self.xs = self.data.bincenters
 
         h = d.factory.hist1d(data, bins)
@@ -362,10 +346,11 @@ class Model(object):
         fitkwargs = {"maxfev": 1000000, "xtol": 1e-10, "ftol": 1e-10}
         if "bounds" in kwargs:
             fitkwargs.pop("maxfev")
+            # this is a matplotlib quirk
             fitkwargs["max_nfev"] = 1000000
         fitkwargs.update(kwargs)
-        parameters, covariance_matrix = optimize.curve_fit(model, self.xs, \
-                                                           data, p0=startparams, \
+        parameters, covariance_matrix = optimize.curve_fit(model, self.xs,\
+                                                           data, p0=startparams,\
                                                            # bounds=(np.array([0, 0, 0, 0, 0] + [0]*len(start_params[5:])),\
                                                            # np.array([np.inf, np.inf, np.inf, np.inf, np.inf] +\
                                                            # [np.inf]*len(start_params[5:]))),\
@@ -378,10 +363,20 @@ class Model(object):
         if not silent: print("##########################################")
 
         # simple GOF
-        norm = h.bincontent / h_norm.bincontent
-        norm = norm[np.isfinite(norm)][0]
+        norm = 1
+        if normalize:
+            norm = h.bincontent / h_norm.bincontent
+            norm = norm[np.isfinite(norm)][0]
+
+        self.norm = norm
         chi2 = (calculate_chi_square(h.bincontent, norm * model(h.bincenters, *parameters)))
         self.chi2_ndf = chi2/nbins
+
+        # FIXME: new feature
+        #for cmp in self.components:
+        #    thischi2 = (calculate_chi_square(h.bincontent, norm * cmp(h.bincenters)))
+        #    self.chi2_ndf_components.append(thischi2/nbins)
+
         if not silent: print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
         self.best_fit_params = parameters
         return parameters
@@ -396,13 +391,19 @@ class Model(object):
         """
         self.__init__(self._callbacks[0], self.startparams[:self.n_params])
 
-    def plot_result(self, ymin=1000, ylabel="normed bincount", xlabel="Q [C]", fig=None,\
+    def plot_result(self, ymin=1000,xmax=8, ylabel="normed bincount",\
+                    xlabel="Q [C]", fig=None,\
+                    model_alpha=.3,\
                     add_parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\",0),)):
         """
         Show the fit result
 
         Args:
-            ymin (float): limit the yrange
+            ymin (float): limit the yrange to ymin
+            xmax (float): limit the xrange to xmax
+            model_alpha (float): 0 <= x <= 1 the alpha value of the lineplot
+                                for the model
+            ylabel (str): label for yaxis
             fig (pylab.figure): A figure instance
             add_parameter_text (tuple): Display a parameter in the table on the plot
                                         ((text, parameter_number), (text, parameter_number),...)
@@ -413,12 +414,13 @@ class Model(object):
             fig = p.figure()
         ax = fig.gca()
         self.data.scatter(color="k")
-        ax.plot(self.xs, self.prediction(self.xs), color=PALETTE[2])
+        ax.plot(self.xs, self.prediction(self.xs), color=PALETTE[2], alpha=model_alpha)
         for comp in self.components:
             ax.plot(self.xs, comp(self.xs), linestyle=":", lw=1, color="k")
 
         ax.set_yscale("log")
         ax.set_ylim(ymin=ymin)
+        ax.set_xlim(xmax=xmax)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         infotext = r"\begin{tabular}{ll}"
@@ -426,8 +428,6 @@ class Model(object):
         infotext += r"entries& {}\\".format(self.data.stats.nentries)
         if add_parameter_text is not None:
             for partext in add_parameter_text:
-                print (partext[0])
-                print (partext[1])
                 infotext += partext[0].format(self.best_fit_params[partext[1]])
             #infotext += r"$\mu_{{SPE}}$& {:4.2e}\\".format(self.best_fit_params[mu_spe_is_par])
         infotext += r"\end{tabular}"
@@ -438,64 +438,65 @@ class Model(object):
         sb.despine()
         return fig
 
-#mu_p, sigma_p, mu, sigma , lmbda
-def fit_model_deprecated(data, nbins, model, start_params, **kwargs):
-    """
 
+def pedestal_fit(filename, nbins, fig=None):
+    """
+    Fit a pedestal to measured waveform data
+    One shot function for
+    * integrating the charges
+    * making a histogram
+    * fitting a simple gaussian to the pedestal
+    * calculating mu
+        P(hit) = (N_hit/N_all) = exp(QExCExLY)
+        where P is the probability for a hit, QE is quantum efficiency,
+        CE is the collection efficiency and
+        LY the (unknown) light yield
 
     Args:
-        data (np.ndarray):
-        nbins (int)
-        model (func):
-        start_params (tuple):
-        **kwargs: will be passed on to scipy.optimize.curve_fit
+        filename (str): Name of the file with waveform data
+        nbins (int): number of bins for the underlaying charge histogram
 
-    Keyword Args:
-        xerr (np.ndarray):
-
-    Returns:
-        tuple
     """
 
-    bins = np.linspace(min(data), max(data), nbins)
-    h = d.factory.hist1d(data,bins)
-    h_norm = h.normalized(density=True)
-    xs = h_norm.bincenters
-    data = h_norm.bincontent
-    #mu_p, sigma_p, mu, sigma , lmbda
-    print ("Using start params...", start_params)
+    head, wf = tools.load_waveform(filename)
+    charges = -1e12 * tools.integrate_wf(head, wf)
+    plt.plot_waveform(head, tools.average_wf(wf))
+    p.savefig(filename.replace(".npy", ".wf.pdf"))
+    one_gauss = lambda x, n, y, z: n * fit.gauss(x, y, z, 1)
+    ped_mod = fit.Model(one_gauss, (1000, -.1, 1))
+    ped_mod.fit_to_data(charges, nbins, normalize=False)
+    fig = ped_mod.plot_result(add_parameter_text=((r"$\mu_{{ped}}$& {:4.2e}\\", 1), \
+                                                  (r"$\sigma_{{ped}}$& {:4.2e}\\", 2)), \
+                              xlabel=r"$Q$ [pC]", ymin=1, xmax=8, model_alpha=.2, fig=fig, ylabel="events")
 
-    fitkwargs = {"maxfev" : 1000000, "xtol": 1e-10, "ftol": 1e-10}
-    if "bounds" in kwargs:
-        fitkwargs.pop("maxfev")
-        fitkwargs["max_nfev"] = 1000000
-    fitkwargs.update(kwargs)
-    parameters, covariance_matrix = optimize.curve_fit(model,xs,\
-                                                       data, p0=start_params,\
-                                                       # bounds=(np.array([0, 0, 0, 0, 0] + [0]*len(start_params[5:])),\
-                                                       # np.array([np.inf, np.inf, np.inf, np.inf, np.inf] +\
-                                                       # [np.inf]*len(start_params[5:]))),\
-                                                       # max_nfev=100000)
-                                                       # method="lm",\
-                                                       **fitkwargs)
+    ax = fig.gca()
+    n_hit = abs(ped_mod.data.bincontent - ped_mod.prediction(ped_mod.xs)).sum()
+    ax.grid(1)
+    bins = np.linspace(min(charges), max(charges), nbins)
+    data = d.factory.hist1d(charges, bins)
+    n_pedestal = ped_mod.data.stats.nentries - n_hit
 
+    mu = -1 * np.log(n_pedestal / ped_mod.data.stats.nentries)
 
-    print ("Fit yielded parameters", parameters)
-    print ("Covariance matrix" , covariance_matrix)
-    print ("##########################################")
+    print("==============")
+    print("All waveforms: {:4.2f}".format(ped_mod.data.stats.nentries))
+    print("HIt waveforms: {:4.2f}".format(n_hit))
+    print("NoHit waveforms: {:4.2f}".format(n_pedestal))
+    print("mu = -ln(N_PED/N_TRIG) = {:4.2e}".format(mu))
 
-    # simple GOF
-    norm = h.bincontent / h_norm.bincontent
-    norm = norm[np.isfinite(norm)][0]
-    chi2 = (calculate_chi_square(h.bincontent, norm * model(h.bincenters, *parameters)))
-    print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
-    return parameters
+    ax.fill_between(ped_mod.xs, 1e-4, ped_mod.prediction(ped_mod.xs),\
+                    facecolor=PALETTE[2], alpha=.2)
+    p.savefig(filename.replace(".npy", ".pdf"))
+    # xs = self.data.bincenters
+    return ped_mod
 
 
 def fit_model(waveformfile, model, startparams, \
-              rej_outliers=True, nbins=200, \
+              rej_outliers=False, nbins=200, \
+              silent=False,\
               parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\", 5),),
-              use_minuit=False,
+              use_minuit=False,\
+              normalize=True,\
               **kwargs):
     """
     Standardazied fitting routine
@@ -511,6 +512,8 @@ def fit_model(waveformfile, model, startparams, \
         parameter_text (tuple): will be passed to model.plot_result
         use_miniuit (bool): use minuit to minimize startparams for best 
                             chi2
+        normalize (bool): normalize data before fitting
+        silent (bool): silence output
     Returns:
         tuple
     """
@@ -547,7 +550,7 @@ def fit_model(waveformfile, model, startparams, \
         m.migrad()
     else:
         model.startparams = startparams
-        model.fit_to_data(charges, nbins, **kwargs)
+        model.fit_to_data(charges, nbins,normalize=normalize, silent=silent, **kwargs)
     fig = model.plot_result(ymin=1e-4, \
                             add_parameter_text=parameter_text, \
                             xlabel=r"$Q$ [pC]")
