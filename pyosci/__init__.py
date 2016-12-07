@@ -2,7 +2,7 @@
 Package to read out TektronixDPO4104B oscilloscope 
 """
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 import appdirs as _appdirs
 import shutil as _shutil

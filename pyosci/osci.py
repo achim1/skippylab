@@ -44,8 +44,6 @@ class TektronixDPO4104B(object):
     """
 
     # constants used by the socket connection
-    WAITTIME = .25
-    SOCK_TIMEOUT = 5
     MAXTRIALS = 5
 
     # setget properties
@@ -91,7 +89,6 @@ class TektronixDPO4104B(object):
         self.port = port
         self.connect_trials = 0
         self.wf_buff_header = None # store a waveform header in case they are all the same
-        #self._osock = socket.create_connection((ip,port),self.SOCK_TIMEOUT)
         self.instrument = vxi11.Instrument(ip)
 
     #def __del__(self):
@@ -133,17 +130,7 @@ class TektronixDPO4104B(object):
             self.connect_trials += 1
 
         return response
-        #self._osock.send(enc(command))
-        #time.sleep(self.WAITTIME)
-        #try:
-        #    response = self._osock.recv(buffsize)
-        #except socket.timeout:
-        #    self.connect_trials += 1
-        #    self.reopen_socket()
-        #    time.sleep(self.WAITTIME)
-        #    response = self.send(command)
-
-        return dec(response)
+        #return dec(response)
 
     def set(self, command):
         """
@@ -157,7 +144,6 @@ class TektronixDPO4104B(object):
         """
         if self.verbose: print("Sending {}".format(enc(command)))
         self.instrument.write(command)
-        #self._osock.send(enc(command))
 
     def ping(self):
         """
@@ -263,14 +249,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     scope = TektronixDPO4104B(args.ip,args.port)
-    #scope._osock.send("*IDN?\r\n".encode("utf8"))
-    #print ("querying")
-    #print(scope._osock.recv(2**32))
-    #scope._osock.send(u"*IDN?\r\n".encode("latin-1"))
-    #print(scope._osock.recv(2**32))
     
     scope.ping()
-    #print (scope.query(cmd.SOURCE))
-    #scope.query(cmd.SOURCE)
-    #print ( scope.get_histogram())
     scope.get_waveform()
