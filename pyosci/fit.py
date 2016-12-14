@@ -37,7 +37,7 @@ def get_n_hit(charges, nbins):
 
     Args:
         charges (np.ndarray): The measured charges
-        pedestal_model (fit.Model): A model to fit for the pedestal
+        nbins (int): number of bins to use
 
     Returns:
         tuple (n_hit, n_all)
@@ -45,14 +45,13 @@ def get_n_hit(charges, nbins):
     one_gauss = lambda x, n, y, z: n * gauss(x, y, z, 1)
     ped_mod = Model(one_gauss, (1000, -.1, 1))
     ped_mod.fit_to_data(charges, nbins, normalize=False, silent=False)
-
     n_hit = abs(ped_mod.data.bincontent - ped_mod.prediction(ped_mod.xs)).sum()
     n_pedestal = ped_mod.data.stats.nentries - n_hit
     n_all = ped_mod.data.stats.nentries
     return n_hit, n_all
 
 
-def calculate_mu(charges, nbins):
+    def calculate_mu(charges, nbins):
     """
     Calculate mu out of
     P(hit) = (N_hit/N_all) = exp(QExCExLY)
@@ -79,6 +78,29 @@ def reject_outliers(data, m=2):
 
     return data[abs(data - np.mean(data)) < m * np.std(data)]
 
+
+def calculate_gain(mu_ped, mu_spe, prefactor=1e-12):
+    """
+    Calculate the pmt gain from the charge distribution
+
+    Args:
+        mu_ped (float): the mean of the gaussian fitting the pedestal
+        mu_spe (float): the mean of the gaussian fitting the spe response
+
+    Keyword Args:
+        prefactor (float): unit of charge (default pico coulomb)
+
+    Returns:
+        float
+    """
+    charge =  abs(mu_spe) - abs(mu_ped)
+    charge *= prefactor
+    return charge/ELEMENTARY_CHARGE
+
+
+def calculate_peak_to_valley_ratio(model):
+
+    pass
 
 def calculate_chi_square(data, model_data):
     """
@@ -168,14 +190,26 @@ class Model(object):
 
     """
 
-    def __init__(self, func, startparams=None):
+    def __init__(self, func, startparams=None, norm=1):
+        """
+        Initialize a new model
+
+
+        Args:
+            func: the function to predict the data
+            startparams (tuple): A set of startparameters.
+            norm: multiply the result of func when evaluated with norm
+        """
 
         # if no startparams are given, construct 
         # and initialize with 0es.
         # FIXME: better estimate?
         if startparams is None:
             startparams = [0]*func.__code__.co_argcount
-        self._callbacks = [func]
+
+        def normed_func(*args, **kwargs):
+            return norm*func(*args, **kwargs)
+        self._callbacks = [normed_func]
         self.startparams = [*startparams]
         self.n_params = [len(startparams)]
         self.best_fit_params = [*startparams]
@@ -188,6 +222,25 @@ class Model(object):
         self.norm = None
         self.prediction = lambda xs: reduce(lambda x, y: x + y,\
                                   [f(xs) for f in self.components])
+        self.first_guess = None
+
+    def add_first_guess(self, func):
+        """
+        Use func to estimate better startparameters
+
+        Args:
+            func: Has to yield a set of startparameters
+
+        Returns:
+
+        """
+
+        assert self.all_coupled, "Does not work yet if not all variables are coupled"
+        assert func.__code__.co_argcount == len(self.startparams), "first guess algorithm must yield startparams!"
+        self.first_guess = func
+
+    def eval_first_guess(self, data):
+        self.startparams = self.first_guess(data)
 
     def couple_models(self, coupling_variable):
         """
@@ -359,7 +412,7 @@ class Model(object):
                                                            **fitkwargs)
 
         if not silent: print("Fit yielded parameters", parameters)
-        if not silent: print("Covariance matrix", covariance_matrix)
+        if not silent: print("{:4.2f} NANs in covariance matrix".format(len(covariance_matrix[np.isnan(covariance_matrix)])))
         if not silent: print("##########################################")
 
         # simple GOF
@@ -491,7 +544,7 @@ def pedestal_fit(filename, nbins, fig=None):
     return ped_mod
 
 
-def fit_model(waveformfile, model, startparams, \
+def fit_model(charges, model, startparams=None, \
               rej_outliers=False, nbins=200, \
               silent=False,\
               parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\", 5),),
@@ -502,9 +555,9 @@ def fit_model(waveformfile, model, startparams, \
     Standardazied fitting routine
 
     Args:
-        waveformfile (str): full path to a file with waveforms saved by pyosci
+        charges (np.ndarray): Charges obtained in a measurement (no histogram)
         model (pyosci.fit.Model): A model to fit to the data
-        startparams (tuple): initial parameters to model
+        startparams (tuple): initial parameters to model, or None for first guess
 
     Keyword Args:
         rej_outliers (bool): Remove extreme outliers from data
@@ -517,32 +570,56 @@ def fit_model(waveformfile, model, startparams, \
     Returns:
         tuple
     """
-    head, wf = tools.load_waveform(waveformfile)
-    plt.plot_waveform(head, tools.average_wf(wf))
-    charges = 1e12 * np.array([-1 * tools.integrate_wf(head, w) for w in wf])
-    # charges += np.ones(len(charges))
     if rej_outliers:
         charges = reject_outliers(charges)
     if use_minuit:
+
         from iminuit import Minuit
-        def do_min(a, b, c, d, e, f, g, h, i, j, k): #FIXME!!!
-            model.startparams = (a, b, c, d, e, f, g, h, i, j, k)
-            model.fit_to_data(charges, nbins, silent=True, **kwargs)
-            return model.chi2_ndf
-        if "bounds" in kwargs: 
-            bnd = kwargs["bounds"]
-            m = Minuit(do_min, limit_a=(bnd[0][0],bnd[1][0]),
-                               limit_b=(bnd[0][1],bnd[1][1]),     
-                               limit_c=(bnd[0][2],bnd[1][2]),     
-                               limit_d=(bnd[0][3],bnd[1][3]),     
-                               limit_e=(bnd[0][4],bnd[1][4]),     
-                               limit_f=(bnd[0][5],bnd[1][5]),     
-                               limit_g=(bnd[0][6],bnd[1][6]),     
-                               limit_h=(bnd[0][7],bnd[1][7]),     
-                               limit_i=(bnd[0][8],bnd[1][8]),     
-                               limit_j=(bnd[0][9],bnd[1][9]), 
-                               limit_k=(bnd[0][10],bnd[1][10]))   
+
+        # FIXME!! This is too ugly. Minuit wants named parameters ... >.<
+
+        assert len(startparams) > 10; "Currently more than 10 paramters are not supported for minuit fitting!"
+        assert model.all_coupled, "Minuit fitting can only be done for models with all parmaters coupled!"
+        names = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"]
+
+        funcstring = "def do_min("
+        for i,__ in enumerate(startparams):
+            funcstring += names[i] + ","
+        funcstring = funcstring[:-1] + "):\n"
+        funcstring += "\tmodel.startparams = ("
+        for i,__ in enumerate(startparams):
+            funcstring += names[i] + ","
+        funcstring = funcstring[:-1] + ")\n"
+        funcstring += "\tmodel.fit_to_data(charges, nbins, silent=True, **kwargs)"
+        funcstring += "\treturn model.chi2_ndf"
+
+
+        #def do_min(a, b, c, d, e, f, g, h, i, j, k): #FIXME!!!
+        #    model.startparams = (a, b, c, d, e, f, g, h, i, j, k)
+        #    model.fit_to_data(charges, nbins, silent=True, **kwargs)
+        #    return model.chi2_ndf
+        exec(funcstring)
+        bnd = kwargs["bounds"]
+        if "bounds" in kwargs:
+            min_kwargs = dict()
+            for i,__ in enumerate(startparams):
+                min_kwargs["limit_" + names[i]] =(bnd[0][i],bnd[1][i])
+            m = Minuit(do_min, **min_kwargs)
+            #m = Minuit(do_min, limit_a=(bnd[0][0],bnd[1][0]),
+            #                   limit_b=(bnd[0][1],bnd[1][1]),
+            #                   limit_c=(bnd[0][2],bnd[1][2]),
+            #                   limit_d=(bnd[0][3],bnd[1][3]),
+            #                   limit_e=(bnd[0][4],bnd[1][4]),
+            #                   limit_f=(bnd[0][5],bnd[1][5]),
+            #                   limit_g=(bnd[0][6],bnd[1][6]),
+            #                   limit_h=(bnd[0][7],bnd[1][7]),
+            #                   limit_i=(bnd[0][8],bnd[1][8]),
+            #                   limit_j=(bnd[0][9],bnd[1][9]),
+            #                   limit_k=(bnd[0][10],bnd[1][10]))
         else:
+
+
+
             m = Minuit(do_min)
         # hand over the startparams
         for key, value in zip(["a","b","c","d","e","f","g","h","i","j"], startparams):
@@ -551,19 +628,15 @@ def fit_model(waveformfile, model, startparams, \
     else:
         model.startparams = startparams
         model.fit_to_data(charges, nbins,normalize=normalize, silent=silent, **kwargs)
-    fig = model.plot_result(ymin=1e-4, \
-                            add_parameter_text=parameter_text, \
-                            xlabel=r"$Q$ [pC]")
-    if hasattr(model, "parameter_names"):
-        pretty_pars = [k for k in zip(model.parameter_names, model.best_fit_params)]
+
+    # check for named tuple
     if hasattr(startparams, "_make"): # duck typing
         best_fit_params = startparams._make(model.best_fit_params)
     else:
         best_fit_params = model.best_fit_params
     print("Best fit parameters {}".format(best_fit_params))
-    ax = fig.gca()
-    ax.grid(1)
-    return ax, model
+
+    return model
 
 
 if __name__ == "__main__":

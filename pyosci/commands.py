@@ -3,7 +3,6 @@ A namespace for oscilloscope string commands. The commands are send as ASCII
 to the scope using a socket connection
 """
 
-import enum
 query = lambda cmd : cmd  + "?"
 
 def add_arg(cmd, arg):
@@ -46,25 +45,25 @@ def concat(*cmd):
     return concated
 
 
-def decode(response):
-    """
-    Decode osciloscope response from bytes to a string, cleaning
-    trailing EOL characters.
-
-    Args:
-        response (bytes): recieved from oscilloscope
-
-    Returns:
-        str
-    """
-    if response is None:
-        return response
-    if isinstance(response,bytes):
-        response = response.decode("utf8")
-    response = clean_response(response)
-    if response in [False, "\r\n", "\n\r"]:
-        response = None
-    return response
+#def decode(response):
+#    """
+#    Decode osciloscope response from bytes to a string, cleaning
+#    trailing EOL characters.
+#
+#    Args:
+#        response (bytes): recieved from oscilloscope
+#
+#    Returns:
+#        str
+#    """
+#    if response is None:
+#        return response
+#    if isinstance(response,bytes):
+#        response = response.decode("utf8")
+#    response = clean_response(response)
+#    if response in [False, "\r\n", "\n\r"]:
+#        response = None
+#    return response
 
 
 def clean_response(response):
@@ -105,25 +104,25 @@ def parse_curve_data(header, curve):
     curve.replace("#", "")
 
 
-def encode(cmd):
-    """
-    Append trailing return carriage and convert
-    to bytes. Trailing EOL characters are important
-    otherwise the scope will listen for input commands
-    endlessly.
-
-    Args:
-        cmd (str): command to be sanitized
-
-    Returns:
-        bytearray
-    """
-
-    if not cmd.endswith("\r\n"):
-        cmd = cmd + "\r\n"
-
-    # python3 needs byterepresentation for socket
-    return cmd.encode("utf8")
+#def encode(cmd):
+#    """
+#    Append trailing return carriage and convert
+#    to bytes. Trailing EOL characters are important
+#    otherwise the scope will listen for input commands
+#    endlessly.
+#
+#    Args:
+#        cmd (str): command to be sanitized
+#
+#    Returns:
+#        bytearray
+#    """
+#
+#    if not cmd.endswith("\r\n"):
+#        cmd = cmd + "\r\n"
+#
+#    # python3 needs byterepresentation for socket
+#    return cmd.encode("utf8")
 
 def histbox_coordinates(left, top, right, bottom):
     """
@@ -144,36 +143,6 @@ def histbox_coordinates(left, top, right, bottom):
     return command
 
 
-def parse_custom_wf_header(head):
-    """
-    Parse a waveform header send by our custom WF_HEADER command
-    The reason why we are not using WFM:Outpre is that the documentation
-    was not so sure about how its response might look
-
-    Args:
-        head (str): the result of a WF_HEADER command
-
-    Returns:
-        dict
-    """
-    head = head.split(";")
-    keys = ["bytno", "enc", "npoints", "xzero", "xincr", "yzero", "yoff", \
-     "ymult", "xunit", "yunit"]
-
-    assert len(head) == len(keys), "Cannot read out all the header info I want!"
-    parsed = dict(zip(keys,head))
-    for k in parsed:
-        try:
-            f = float(parsed[k])
-            parsed[k] = f
-        except ValueError:
-            continue
-
-        # get rid of extra " in units
-        parsed["xunit"] = parsed["xunit"].replace('"','')
-        parsed["yunit"] = parsed["yunit"].replace('"', '')
-
-    return parsed
 
 #
 # COMMANDS!
@@ -221,13 +190,35 @@ SNAP = "SNAP"
 DATA = "DATA"
 OFF = "0"
 ON = "1"
-CH1,CH2,CH3,CH4 = "CH1", "CH2", "CH3", "CH4"
+
 ASCII = "ASCii"
 BINARY = "BINary"
 SINGLE_ACQUIRE = "1"
 
 # combined commands
 
-WF_HEADER = concat(WF_BYTQ, WF_ENCQ, WF_NPOINTSQ, WF_XZEROQ, WF_XINCRQ,\
-                   WF_YZEROQ, WF_YOFFQ, WF_YMULTQ,\
-                   WF_XUNITQ, WF_YUNITQ)
+
+class TektronixDPO4104BCommands(object):
+    """
+    Namespace for the commands for the TektronixDP04104B
+    """
+    WF_HEADER = concat(WF_BYTQ, WF_ENCQ, WF_NPOINTSQ, WF_XZEROQ, WF_XINCRQ, \
+                       WF_YZEROQ, WF_YOFFQ, WF_YMULTQ, \
+                       WF_XUNITQ, WF_YUNITQ)
+    CH1 = "CH1"
+    CH2 = "CH2"
+    CH3 = "CH3"
+    CH4 = "CH4"
+
+
+class RhodeSchwarzCommands(object):
+    """
+    Namespace for the commands for the RhodeSchwarz oscilloscope
+    """
+    CH1 = "CHAN1"
+    CH2 = "CHAN2"
+    CH3 = "CHAN3"
+    CH4 = "CHAN4"
+    WAVEFORM = "DATA?"
+    WF_HEADER = "DATA:HEADer?"
+    CURVE = "DATA:VALues?"

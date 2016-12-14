@@ -23,7 +23,7 @@ def get_logger(loglevel,logfile=None):
     def exception_handler(exctype, value, tb):
         logger.critical("Uncaught exception", exc_info=(exctype, value, tb))
 
-    logger = logging.getLogger()
+    logger = logging.getLogger(__name__)
     logger.setLevel(loglevel)
     ch = logging.StreamHandler()
     ch.setLevel(loglevel)

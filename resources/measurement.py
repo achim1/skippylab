@@ -2,7 +2,7 @@ import osci, daq, plotting, tools, commands as cmd
 import numpy as np
 
 # initialize with scope IP adress and port
-odaq = daq.DAQ("169.254.67.106",4000)
+odaq = daq.DAQ(osci.TektronixDPO4104B("169.254.67.106"))
 
 # find a good acquisiton window around peak in waveform
 odaq.find_best_acquisition_window(waveforms=20, trailing=100)

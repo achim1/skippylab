@@ -1,23 +1,34 @@
 [![Code Issues](https://www.quantifiedcode.com/api/v1/project/bd0c238d3dd3406d8dc2d4a456a862e1/badge.svg)](https://www.quantifiedcode.com/app/project/bd0c238d3dd3406d8dc2d4a456a862e1)
 
-pyosci - manage data acquisition with Tectronix DPO 4104B
-=============================================================
+pyosci - manage data acquisition with an vxi11 capable oscilloscope
+========================================================================
 
-** use with python 3.5 **
+Use a vxi11 capable scope (most of the new ones with a LAN port and visa compatibility support that protocoll) as a data acquisition system.
+The package provides a oscilloscope independent DAQ which can be used for scripting the data taking.
 
-This package provides an interface to get data out of the 
-Tektronix DPO 4104B oscilloscope via a network connection.
-The scope's socket server is used for that.
+Requirements
+--------------
+
 For the software to work, the machine this software is installed on needs to be in the same network as the scope and its ip adress must be known.
+*tested only for python 3.5 so far*
 
-Finding out the scope's IP adress
-------------------------------------
+
+
+Supported oscilloscopes so far
+----------------------------------
+
+* TektronixDPO4104B
+
+* Rhode&SchwarzRTO
+
+Finding out the scope's IP adress (Tektronix)
+-------------------------------------------------
 
 * Press the utility button
 
 * Select io with the mainpurpose dial (upper left one)
 
-* Lan settings
+* LAN settings
 
 
 Installation 
@@ -33,27 +44,30 @@ Using the software
 An example is given by the "measurement.py" script which can be found in pyosci/resources. Acquisition of
 waveforms can be performed e.g. like this.
 
+
 ```
-import pyoaci.daq as daq
+import pyosci.osci as osci
+import pyosci.daq as daq
+import pyosci.tools as tools
 
-# scope's ip address and port
-odaq = daq.DAQ("169.254.67.106",4000)
+# initialize with scope IP adress and port
+odaq = daq.DAQ(osci.TektronixDPO4104B("169.254.67.106"))
 
-# adjust the time which is waited in between commands to
-# your needs
-odaq.scope.WAITTIME = 0.1
+# set an acquisiton window -20 +100 ns around peak in waveform
+odaq.set_feature_acquisition_window(20,100) 
 
-# this will acquire some waveforms, average them and show a plot with
-# a reasonable timewindow for data acquisition
-odaq.find_best_acquisition_window(waveforms=20, trailing=100)
-
-# plots some acquired waveforms
+# display some waveforms on the screen
 odaq.show_waveforms()
 
-# get a number of waveforms from the scope. If return_only_charge is set,
-# then they will be integrated directly in order to save memory
-wf = odaq.make_n_acquisitions(50000,trials = 100000, extra_timeout=0., \
-                              return_only_charge = True)
+# header stores information about x and y ticks
+head = odaq.scope.get_wf_header()
+
+# take actual data (e.g. 50000 waveforms) and save it to a 
+# numpy compatible file 
+wf = odaq.make_n_acquisitions(50000)
+tools.save_waveform(head, wf, "measurement_ctrl_vlt")
+
+
 ```
 
 Extending the software
@@ -83,9 +97,9 @@ def setget(cmd):
 This can be used to expand the functionality with such commands easily:
 
 ```
-class TektronixDPO4104B(object):
+class MyNewFancyScope(AbstractBaseOscilloscope):
     """
-    Oscilloscope of type DPO4104B manufactured by Tektronix
+    Implement functionality for a new scope...
     """
 
     ...

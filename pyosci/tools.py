@@ -10,6 +10,7 @@ from copy import deepcopy as copy
 
 IMPEDANCE = 50
 
+
 def average_wf(waveforms):
     """
     Get the average waveform
@@ -26,6 +27,7 @@ def average_wf(waveforms):
 
     return wf0 / float(len(waveforms))
 
+
 def integrate_wf(header, waveform, method=integrate.simps, impedance = IMPEDANCE):
     """
     Integrate a waveform to get the total charge
@@ -40,20 +42,6 @@ def integrate_wf(header, waveform, method=integrate.simps, impedance = IMPEDANCE
     integral = method(waveform, header["xs"], header["xincr"])
     return integral/impedance
 
-def calculate_gain(header, waveform):
-    """
-    Calculate the gain of a PMT
-
-    Args:
-        header (dict):
-        waveform (np.ndarray):
-
-    Returns:
-        float
-    """
-
-    charge = abs(integrate_wf(header, waveform/IMPEDANCE))
-    return charge/ECHARGE
 
 def save_waveform(header, waveform, filename):
     """

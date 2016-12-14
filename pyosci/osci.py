@@ -1,26 +1,34 @@
 """
-Talk to Textronic scope via sockets
+Communicate with oscilloscope via vxi11 protocoll over LAN network
 """
 
-import argparse
-import socket
 
-from . import commands as cmd
-
+import abc
 import time
 import numpy as np
 import vxi11
+from six import with_metaclass
 
-import logging
+from . import commands as cmd
+from . import logging
 
 from copy import copy
 
+try:
+    # Python 2
+    from itertools import izip
+except ImportError:
+    # Python 3
+    izip = zip
+
 # abbreviations
-dec = cmd.decode
-enc = cmd.encode
+#dec = cmd.decode
+#enc = cmd.encode
 aarg = cmd.add_arg
 q = cmd.query
 
+TCmd = cmd.TektronixDPO4104BCommands
+RSCmd = cmd.RhodeSchwarzCommands
 
 def setget(command):
     """
@@ -34,11 +42,153 @@ def setget(command):
     Returns:
         property object
     """
-    return property(lambda self: self.send(q(command)),\
-                    lambda self, value: self.set(aarg(command, value)))
+    return property(lambda self: self._send(q(command)),\
+                    lambda self, value: self._set(aarg(command, value)))
 
 
-class TektronixDPO4104B(object):
+class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
+    """
+    A oscilloscope with a high sampling rate in the order of several
+    gigasamples. Defines the scope API the DAQ reiles on
+    """
+
+    def __init__(self, ip="169.254.68.19"):
+        """
+        Connect to the scope via its socket server
+
+        Args:
+            ip (str): ip of the scope
+        """
+        self.ip = ip
+        self.connect_trials = 0
+        self.wf_buff_header = None # store a waveform header in case they are all the same
+        self.instrument = vxi11.Instrument(ip)
+        self.active_channel = None
+
+    def reopen_socket(self):
+        """
+        Close and reopen the socket after a timeout
+
+        Returns:
+            None
+        """
+        self.instrument = vxi11.Instrument(self.ip)
+
+    def _send(self,command):
+        """
+        Send command to the scope. Raises socket.timeout error if
+        it had failed too often
+
+        Args:
+            command (str): command to be sent to the
+                           scope
+
+        """
+        if self.connect_trials == self.MAXTRIALS:
+            self.connect_trials = 0
+            raise vxi11.vxi11.Vxi11Exception("TimeOut")
+
+        if self.verbose: print ("Sending {}".format(command))
+        try:
+            response = self.instrument.ask(command)
+        except Exception as e:
+            self.reopen_socket()
+            response = self.instrument.ask(command)
+            self.connect_trials += 1
+
+        return response
+
+    def _set(self, command):
+        """
+        Send a command bur return no response
+
+        Args:
+            command (str): command to be send to the scope
+
+        Returns:
+            None
+        """
+        if self.verbose: print("Sending {}".format(command))
+        self.instrument.write(command)
+
+    def ping(self):
+        """
+        Check if oscilloscope is connected
+        """
+
+        ping = self._send(cmd.WHOAMI)
+        print (ping)
+        return True if ping else False
+
+    def __repr__(self):
+        """
+        String representation of the scope
+        """
+        return "<" + self._send(cmd.WHOAMI) + ">"
+
+    @abc.abstractmethod
+    def select_channel(self, channel):
+        """
+        Select a channel for the data acquisition
+
+        Args:
+            channel (int): Channel number
+
+        Returns:
+            None
+        """
+        return
+
+
+class Waveform(object):
+    """
+    A non-oscilloscope dependent representation of a measured
+    waveform
+    """
+    header = dict()
+
+    def __init__(self, header, curvedata):
+        """
+        Args:
+            header (dict): Metadata, like xs, units, etc.
+            curvedata (np.ndarray): The voltage data
+        """
+
+        self.header = header
+        self.data = curvedata
+
+    @property
+    def ns(self):
+        """
+        Return the signal recording time with ns precision
+
+        Returns:
+            np.ndarray
+        """
+        return
+
+    @property
+    def mV(self):
+        """
+        Return the recorded voltages per bin
+
+        Returns:
+            np.ndarray
+        """
+        return
+
+    @property
+    def bins(self):
+        """
+        Return digitizer time bin numbers (arbitrary scale)
+
+        Returns:
+            np.ndarray
+        """
+        return
+
+
+class TektronixDPO4104B(AbstractBaseOscilloscope):
     """
     Oscilloscope of type DPO4104B manufactured by Tektronix
     """
@@ -60,7 +210,62 @@ class TektronixDPO4104B(object):
     histend = setget(cmd.HISTEND)
     verbose = False
 
-    @property
+    def __init__(self, ip):
+        AbstractBaseOscilloscope.__init__(self, ip)
+        self.active_channel = TCmd.CH1
+
+    def _parse_wf_header(self,header):
+        """
+        Parse a waveform header send by our custom WF_HEADER command
+        The reason why we are not using WFM:Outpre is that the documentation
+        was not so sure about how its response might look
+
+        Args:
+            head (str): the result of a WF_HEADER command
+
+        Returns:
+            dict
+        """
+        head = header.split(";")
+        keys = ["bytno", "enc", "npoints", "xzero", "xincr", "yzero", "yoff", \
+                "ymult", "xunit", "yunit"]
+
+        assert len(head) == len(keys), "Cannot read out all the header info I want!"
+
+        parsed = dict(zip(keys, head))
+        for k in parsed:
+            try:
+                f = float(parsed[k])
+                parsed[k] = f
+            except ValueError:
+                continue
+
+            # get rid of extra " in units
+            parsed["xunit"] = parsed["xunit"].replace('"', '')
+            parsed["yunit"] = parsed["yunit"].replace('"', '')
+
+            # also some are ints
+            parsed["npoints"] = int(parsed["npoints"])
+        return parsed
+
+    def select_channel(self, channel):
+        """
+        Select the channel for the readout
+
+        Args:
+            channel (int): Channel number (1-4)
+
+        Returns:
+            None
+        """
+
+        assert 0 < channel < 5, "Channel value has to be 1-4"
+
+        channel_dict = {1 : TCmd.CH1, 2: TCmd.CH2, 3: TCmd.CH3, 4: TCmd.CH4}
+        self.source = channel_dict[channel]
+        self.active_channel = channel_dict[channel]
+        return
+
     def get_triggerrate(self):
         """
         The rate the scope is triggering. This number is provided
@@ -69,7 +274,7 @@ class TektronixDPO4104B(object):
         Returns:
             float
         """
-        trg_rate = self.send(cmd.TRG_RATEQ)
+        trg_rate = self._send(cmd.TRG_RATEQ)
         trg_rate = float(trg_rate)
         # from the osci docs
         # the IEEE Not A Number (NaN = 99.10E+36)
@@ -77,82 +282,46 @@ class TektronixDPO4104B(object):
             trg_rate = np.nan
         return trg_rate
 
-    def __init__(self,ip="169.254.68.19",port=4000):
+    def reset_acquisition_window(self):
         """
-        Connect to the scope via its socket server
-
-        Args:
-            ip (str): ip of the scope
-            port (int): port the scope is listening at
-        """
-        self.ip = ip
-        self.port = port
-        self.connect_trials = 0
-        self.wf_buff_header = None # store a waveform header in case they are all the same
-        self.instrument = vxi11.Instrument(ip)
-
-    #def __del__(self):
-    #    """
-    #    Close the socket
-    #    """
-    #    self._osock.close()
-
-    def reopen_socket(self):
-        """
-        Close and reopoen the socket after a timeout
+        Reset the acquisition window to some factory default reasonables
 
         Returns:
             None
         """
-        #self._osock = socket.create_connection((self.ip, self.port), self.SOCK_TIMEOUT)
-        self.instrument = vxi11.Instrument(self.ip)
+        self.data = cmd.SNAP
 
-    def send(self,command,buffsize=2**16):
+    def get_time_binwidth(self):
         """
-        Send command to the scope. Raises socket.timeout error if
-        it had failed too often
-
-        Args:
-            command (str): command to be sent to the 
-                           scope
-
-        """
-        if self.connect_trials == self.MAXTRIALS:
-            self.connect_trials = 0
-            raise socket.timeout
-
-        if self.verbose: print ("Sending {}".format(enc(command)))
-        try:
-            response = self.instrument.ask(command)
-        except Exception as e:
-            self.reopen_socket()
-            response = self.instrument.ask(command)
-            self.connect_trials += 1
-
-        return response
-        #return dec(response)
-
-    def set(self, command):
-        """
-        Send a command bur return no response
-
-        Args:
-            command (str): command to be send to the scope
+        Get the binwidth of the time - that is sampling rate
 
         Returns:
-            None
+            float
         """
-        if self.verbose: print("Sending {}".format(enc(command)))
-        self.instrument.write(command)
+        head = self.get_wf_header()
+        return float(head["xincr"])
 
-    def ping(self):
+    def get_waveform_bins(self):
         """
-        Check if oscilloscope is connected
-        """
+        Get the time bin numbers for the waveform voltage data
 
-        ping = self.send(cmd.WHOAMI)
-        print (ping)
-        return True if ping else False
+        Returns:
+            np.ndarray
+        """
+        head = self.get_wf_header()
+        bin_zero = self.data_start
+        bins = np.linspace(int(self.data_start), int(self.data_stop), int(head["npoints"]))
+        return bins
+
+    def get_waveform_times(self):
+        """
+        Get the time for the waveform bins
+
+        Returns:
+            np.ndarray
+        """
+        head = self.get_wf_header()
+        return head["xs"]
 
     def get_histogram(self):
         """
@@ -161,7 +330,7 @@ class TektronixDPO4104B(object):
         """
         start = self.histstart
         end = self.histend
-        bincontent = self.send(cmd.HISTDATA)
+        bincontent = self._send(cmd.HISTDATA)
         assert None not in [start,end,bincontent],\
                    "Try again! might just be a hickup {} {} {}".format(start,end,bincontent)
 
@@ -193,8 +362,8 @@ class TektronixDPO4104B(object):
         Returns:
             dict
         """
-        header = self.send(cmd.WF_HEADER)
-        header = cmd.parse_custom_wf_header(header)
+        header = self._send(TCmd.WF_HEADER)
+        header = self._parse_wf_header(header)
         self.wf_buff_header = header
         #header["xs"] = np.ones(len(header["npoints"]))*header["xzero"]
         if absolute_timing:
@@ -222,33 +391,86 @@ class TektronixDPO4104B(object):
         """
         #self.acquire_mode = cmd.SINGLE_ACQUIRE
         if single_acquisition: self.acquire = cmd.ON
-        waveform = self.send(cmd.CURVE)
+        waveform = self._send(cmd.CURVE)
         if single_acquisition: self.acquire = cmd.OFF
-        #self.get_wf_header()
         waveform = np.array([float(k) for k in waveform.split(",")])
-        if self.wf_buff_header is None:
-           self.get_wf_header()
+        header = self.get_wf_header()
 
         # from the docs
         # Value in YUNit units = ((curve_in_dl - YOFf) * YMUlt) + YZEro
-        waveform = (waveform - (np.ones(len(waveform))*self.wf_buff_header["yoff"]))\
-                   * (np.ones(len(waveform))*self.wf_buff_header["ymult"])\
-                   + (np.ones(len(waveform))*self.wf_buff_header["yzero"])
+        waveform = (waveform - (np.ones(len(waveform))*header["yoff"]))\
+                   * (np.ones(len(waveform))*header["ymult"])\
+                   + (np.ones(len(waveform))*header["yzero"])
 
         return waveform
 
-#################################################3
+    def set_single_acquistion(self):
+        """
+        Set the scope in single acquisition mode
+
+        Returns:
+            None
+        """
+        self.acquire = cmd.SINGLE_ACQUIRE
+
+    def set_acquisition_window(self,start, stop):
+        """
+        Set the acquisition window in bin number
+
+        Args:
+            start (int): start bin
+            stop (int): stop bin
+
+        Returns:
+            None
+        """
+        self.data_start = start
+        self.data_stop = stop
+
+    def get_acquisition_window_start(self):
+        """
+        Return the values of the acquisition window in bins
+
+        Returns:
+            tuple (int, int)
+        """
+
+        return int(self.data_start), int(self.data_stop)
 
 
-if __name__ == "__main__":
+class RhodeSchwarzRTO(AbstractBaseOscilloscope):
+    """
+    Made by Rhode&Schwarz, scope with sampling rate up to 20GSamples/s
+    """
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p","--port",help="The port the oscilloscope is listening",type=int,default=4000)
-    parser.add_argument("-i","--ip",help="The ip adress of the oscilloscope",type=str,default="169.254.14.30")
+    def __init__(self, ip):
+        AbstractBaseOscilloscope.__init__(self,ip)
+        self.active_channel = RSCmd.CH1
 
-    args = parser.parse_args()
+    def select_channel(self, channel):
+        """
+        Select the channel for the readout
 
-    scope = TektronixDPO4104B(args.ip,args.port)
-    
-    scope.ping()
-    scope.get_waveform()
+        Args:
+            channel (int): Channel number (1-4)
+
+        Returns:
+            None
+        """
+        channel_dict = {1: RSCmd.CH1, 2: RSCmd.CH2, 3: RSCmd.CH3, 4: RSCmd.CH4}
+        self.active_channel = channel_dict[channel]
+
+    def get_waveform(self):
+        """
+        Get the voltage values for a single waveform
+
+        Returns:
+            np.ndarray
+        """
+        wf_commnad = aarg(self.active_channel,RSCmd.CURVE)
+        raw_wf = self._send(wf_command)
+        pairs = izip(*[iter(raw_wf.split(","))]*2)
+        times, volts = [],[]
+        for val in pairs:
+            volts.append(float(val[1]))
+        return np.array(volts)
