@@ -6,13 +6,25 @@ Communicate with oscilloscope via vxi11 protocoll over LAN network
 import abc
 import time
 import numpy as np
+import pylab as p
 import vxi11
 from six import with_metaclass
 
 from . import commands as cmd
 from . import logging
+from . import plotting
+from . import tools
 
 from copy import copy
+
+bar_available = False
+
+try:
+    import pyprind
+    bar_available = True
+except ImportError:
+    pass
+    #logger.warning("No pyprind available")
 
 try:
     # Python 2
@@ -21,6 +33,8 @@ except ImportError:
     # Python 3
     izip = zip
 
+from functools import reduce
+
 # abbreviations
 #dec = cmd.decode
 #enc = cmd.encode
@@ -28,7 +42,9 @@ aarg = cmd.add_arg
 q = cmd.query
 
 TCmd = cmd.TektronixDPO4104BCommands
-RSCmd = cmd.RhodeSchwarzCommands
+RSCmd = cmd.RhodeSchwarzRTO1044Commands
+
+BIG_NUMBER = 1e25 # A number larger than the amount of captured samples
 
 def setget(command):
     """
@@ -52,7 +68,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
     gigasamples. Defines the scope API the DAQ reiles on
     """
 
-    def __init__(self, ip="169.254.68.19"):
+    def __init__(self, ip="169.254.68.19", loglevel=20):
         """
         Connect to the scope via its socket server
 
@@ -64,6 +80,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
         self.wf_buff_header = None # store a waveform header in case they are all the same
         self.instrument = vxi11.Instrument(ip)
         self.active_channel = None
+        self.logger = logging.get_logger(loglevel)
 
     def reopen_socket(self):
         """
@@ -72,6 +89,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
         Returns:
             None
         """
+        self.logger.debug("Reopening socket on ip {}".format(self.ip))
         self.instrument = vxi11.Instrument(self.ip)
 
     def _send(self,command):
@@ -88,7 +106,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
             self.connect_trials = 0
             raise vxi11.vxi11.Vxi11Exception("TimeOut")
 
-        if self.verbose: print ("Sending {}".format(command))
+        self.logger.debug("Sending {}".format(command))
         try:
             response = self.instrument.ask(command)
         except Exception as e:
@@ -108,7 +126,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
         Returns:
             None
         """
-        if self.verbose: print("Sending {}".format(command))
+        self.logger.debug("Sending {}".format(command))
         self.instrument.write(command)
 
     def ping(self):
@@ -117,14 +135,15 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
         """
 
         ping = self._send(cmd.WHOAMI)
-        print (ping)
+        self.logger.info("Scope responds to {} with {}".format(cmd.WHOAMI, ping))
         return True if ping else False
 
     def __repr__(self):
         """
         String representation of the scope
         """
-        return "<" + self._send(cmd.WHOAMI) + ">"
+        ping = self._send(cmd.WHOAMI)
+        return "<" + ping + ">"
 
     @abc.abstractmethod
     def select_channel(self, channel):
@@ -138,6 +157,25 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
             None
         """
         return
+
+    @abc.abstractproperty
+    def samplingrate(self):
+        """
+        Get the current sampling rate
+
+        Returns:
+            float (GSamples/sec)
+        """
+        return
+
+    def __del__(self):
+        """
+        Destructor, close connection explicitely.
+
+        Returns:
+            None
+        """
+        self.instrument.close()
 
 
 class Waveform(object):
@@ -196,6 +234,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     # constants used by the socket connection
     MAXTRIALS = 5
 
+
     # setget properties
     source = setget(cmd.SOURCE)
     data_start = setget(cmd.DATA_START)
@@ -208,13 +247,35 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     histbox = setget(cmd.HISTBOX)
     histstart = setget(cmd.HISTSTART)
     histend = setget(cmd.HISTEND)
-    verbose = False
 
-    def __init__(self, ip):
-        AbstractBaseOscilloscope.__init__(self, ip)
+    def __init__(self, ip, loglevel=20):
+        AbstractBaseOscilloscope.__init__(self, ip, loglevel=loglevel)
         self.active_channel = TCmd.CH1
+        self._header_buff = False
+        self._wf_buff = np.zeros(len(self.waveform_bins))
+        # fill the buffer
+        self.pull()
 
-    def _parse_wf_header(self,header):
+    def fill_header_buffer(self):
+        self._header_buff = self.wf_header()
+
+    def trigger_singl(self):
+        self.acquire_mode = cmd.RUN_SINGLE
+
+    def trigger_continuous(self):
+        self.acquire_mode = cmd.RUN_CONTINOUS
+
+    def _trigger_acquire(self):
+        """
+        Acquire one single waveform
+
+        Returns:
+            None
+        """
+        self.acquire = "ON"
+
+    @staticmethod
+    def _parse_wf_header(header):
         """
         Parse a waveform header send by our custom WF_HEADER command
         The reason why we are not using WFM:Outpre is that the documentation
@@ -264,9 +325,23 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         channel_dict = {1 : TCmd.CH1, 2: TCmd.CH2, 3: TCmd.CH3, 4: TCmd.CH4}
         self.source = channel_dict[channel]
         self.active_channel = channel_dict[channel]
-        return
+        self.logger.info("Selecting channel {}".format(self.source))
+        return None
 
-    def get_triggerrate(self):
+    @property
+    def samplingrate(self):
+        """
+        The samplingrate in GSamples/S
+
+        Returns:
+            float
+        """
+        head = self.wf_header()
+        self.logger.debug("Got samplingrate of {}".format(1./head["xincr"]))
+        return 1./head["xincr"]
+
+    @property
+    def triggerrate(self):
         """
         The rate the scope is triggering. This number is provided
         by the scope. Most times it is nan though...
@@ -280,50 +355,59 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         # the IEEE Not A Number (NaN = 99.10E+36)
         if trg_rate > 1e35:
             trg_rate = np.nan
+        self.logger.debug("Got triggerrate of {:4.2e}".format(trg_rate))
         return trg_rate
 
     def reset_acquisition_window(self):
         """
-        Reset the acquisition window to some factory default reasonables
-
-        Returns:
+        Reset the acquisition window to the maximum possible acquisition window
+        Returns:In
             None
         """
-        self.data = cmd.SNAP
+        self.data_start = 0
+        self.data_stop = BIG_NUMBER # temporarily set this to a big bogus number
+                                    # this will result in the correct value for
+                                    # "npoints" later
+        head = self.wf_header()
+        self.set_acquisition_window(0, head["npoints"])
 
-    def get_time_binwidth(self):
+    @property
+    def time_binwidth(self):
         """
         Get the binwidth of the time - that is sampling rate
 
         Returns:
             float
         """
-        head = self.get_wf_header()
+        head = self.wf_header()
         return float(head["xincr"])
 
-    def get_waveform_bins(self):
+    @property
+    def waveform_bins(self):
         """
         Get the time bin numbers for the waveform voltage data
 
         Returns:
             np.ndarray
         """
-        head = self.get_wf_header()
+        head = self.wf_header()
         bin_zero = self.data_start
         bins = np.linspace(int(self.data_start), int(self.data_stop), int(head["npoints"]))
         return bins
 
-    def get_waveform_times(self):
+    @property
+    def waveform_times(self):
         """
         Get the time for the waveform bins
 
         Returns:
             np.ndarray
         """
-        head = self.get_wf_header()
+        head = self.wf_header()
         return head["xs"]
 
-    def get_histogram(self):
+    @property
+    def histogram(self):
         """
         Return a histogram which might be recorded
         by the scope
@@ -352,7 +436,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         bincenters = r_binedges + (r_binedges - l_binedges)/2.
         return bincenters, bincontent 
 
-    def get_wf_header(self, absolute_timing=False):
+    def wf_header(self, absolute_timing=False):
         """
         Get some meta information about the *next incoming wavefrm*
 
@@ -378,42 +462,36 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         header["xs"] = xs
         return header
 
-    def get_waveform(self, single_acquisition=False):
+    def acquire_waveform(self, buff_header=False):
         """
         Get the waveform data
 
-
-        Args:
-            single_acquire: use single acquition mode
+        Keyword Args:
+            buff_header: buffer the header (do NOT query the header every time)
+                         WARNING: This is only correct if there are no changes
+                                  to the way the acquisition is made
 
         Returns:
-
+            np.ndarray
         """
-        #self.acquire_mode = cmd.SINGLE_ACQUIRE
-        if single_acquisition: self.acquire = cmd.ON
+
         waveform = self._send(cmd.CURVE)
-        if single_acquisition: self.acquire = cmd.OFF
         waveform = np.array([float(k) for k in waveform.split(",")])
-        header = self.get_wf_header()
+        if buff_header:
+            header = self._header_buff
+            assert header is not None, "Nothing in header buffer, call fill_header_buffer"
+        else:
+            header = self.wf_header()
 
         # from the docs
         # Value in YUNit units = ((curve_in_dl - YOFf) * YMUlt) + YZEro
         waveform = (waveform - (np.ones(len(waveform))*header["yoff"]))\
-                   * (np.ones(len(waveform))*header["ymult"])\
-                   + (np.ones(len(waveform))*header["yzero"])
+                   *(np.ones(len(waveform))*header["ymult"])\
+                   +(np.ones(len(waveform))*header["yzero"])
 
         return waveform
 
-    def set_single_acquistion(self):
-        """
-        Set the scope in single acquisition mode
-
-        Returns:
-            None
-        """
-        self.acquire = cmd.SINGLE_ACQUIRE
-
-    def set_acquisition_window(self,start, stop):
+    def set_acquisition_window(self, start, stop):
         """
         Set the acquisition window in bin number
 
@@ -426,19 +504,172 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         """
         self.data_start = start
         self.data_stop = stop
+        self._wf_buff = np.zeros(len(self.waveform_bins))
+        self.logger.info("Set acquisition window to {} - {}".format(self.data_start, self.data_stop))
 
-    def get_acquisition_window_start(self):
+    def set_feature_acquisition_window(self, leading, trailing, n_waveforms=20):
         """
-        Return the values of the acquisition window in bins
+        Set the acquisition window around the most prominent feature in the waveform
+
+        Args:
+            leading (float): leading ns before the most prominent feature
+            trailing (float): trailing ns after the most prominent feature
+
+        Keyword Args
+            n_waveforms (int): average over n_waveforms to identify the most prominent feature
 
         Returns:
-            tuple (int, int)
+            None
+        """
+        self.reset_acquisition_window()
+        xs, avg = self.average_waveform(n=n_waveforms)
+        wf_bins = self.waveform_bins
+
+        abs_avg = abs(avg)
+        feature_y = max(abs_avg)
+        #feature_x = xs[abs_avg == feature_y]
+        feature_x_bin = wf_bins[abs_avg == feature_y]
+        bin_width = self.time_binwidth
+        leading_bins = 1e-9*float(leading)/bin_width
+        trailing_bins = 1e-9*float(trailing)/bin_width
+        data_start = int(feature_x_bin - leading_bins)
+        data_stop = int(feature_x_bin + trailing_bins)
+        self.set_acquisition_window(data_start, data_stop)
+        return None
+
+    def make_n_acquisitions(self, n,\
+                            trials=20, return_only_charge=False,\
+                            single_acquisition=True):
+        """
+        Acquire n waveforms
+
+        Args:
+            n (int): Number of waveforms to acquire
+
+        Keyword Args:
+            trials (int): Set breaking condition when to abort acquisition
+            return_only_charge (bool): don't get the wf, but only integrated charge instead
+            single_acquisition (bool): use the scopes single acquisition mode
+
+        Returns:
+            list: [wf_1,wf_2,...]
+
+        """
+        wforms = list()
+        acquired = 0
+        trial = 0
+        if bar_available:
+            bar = pyprind.ProgBar(n, track_time=True, title='Acquiring waveforms...')
+        if single_acquisition:
+            self.acquire_mode = cmd.RUN_SINGLE
+
+        wf_buff = 0
+        while acquired < n:
+            try:
+                if single_acquisition:
+                    self.acquire = "ON"
+                wf = self.acquire_waveform(buff_header=True)
+                if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
+                    continue # flatline test
+                if (wf - wf_buff).sum() == 0:
+                    continue # test if scope just returned the
+                             # same waveform again
+                if return_only_charge:
+                     wf = tools.integrate_wf(header, wf)
+                wf_buff = wf
+                wforms.append(wf)
+                acquired += 1
+                if bar_available:
+                    bar.update()
+
+            except Exception as e:
+                self.logger.critical("Can not acquire wf..{}".format(e))
+                trial += 1
+            if trial == trials:
+                break
+        if bar_available:
+            print(bar)
+        return wforms
+
+    def average_waveform(self,n=10):
+        """
+        Acquire some waveforms and take the average
+
+        Keyword Args.
+            n (int): number of waveforms to average over
+
+        Returns:
+            tuple(np.array). xs, ys
+
         """
 
-        return int(self.data_start), int(self.data_stop)
+        wf = self.make_n_acquisitions(n)
+        xs = self.waveform_times
+        len_wf = [len(w) for w in wf]
+        wf = [w for w in wf if len(w) == min(len_wf)]
+        avg = reduce(lambda x, y: x+y, wf)/n
+        return xs, avg
+
+    def show_waveforms(self,n=5):
+        """
+        Demonstration function: Will use pylab show to
+        plot some acquired waveforms
+
+        Keyword Args:
+            n (int): number of waveforms to show
+
+        Returns:
+            None
+        """
+
+        wf = self.make_n_acquisitions(n)
+        head = self.wf_header()
+        for i in range(len(wf)):
+            try:
+                plotting.plot_waveform(head,wf[i])
+            except Exception as e:
+                print (e)
+
+        p.show()
+
+    def fill_buffer(self):
+        """
 
 
-class RhodeSchwarzRTO(AbstractBaseOscilloscope):
+        Returns:
+
+        """
+        self._wf_buff = self.acquire_waveform()
+
+
+    def pull(self, single_acquisition=False):
+        """
+        Fit in the API for the DAQ. Returns waveform data
+
+        Returns:
+            dict
+        """
+        # FIXME: The buffer mechanism fails if this is the first
+        # waveform at all.
+        data = dict()
+        while True:
+            wf = self.acquire_waveform()
+
+            if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
+                continue # flatline test
+            elif (wf - self._wf_buff).sum() == 0:
+                self._wf_buff = wf
+                continue # test if scope just returned the
+                         # same waveform again
+            else:
+                self._wf_buff = wf
+                break
+        data.update(self.wf_header())
+        data["waveform"] = wf
+        return data
+
+
+class RhodeSchwarzRTO1044(AbstractBaseOscilloscope):
     """
     Made by Rhode&Schwarz, scope with sampling rate up to 20GSamples/s
     """

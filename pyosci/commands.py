@@ -162,7 +162,7 @@ HISTEND = "HIStogram:END"
 HISTDATA = "HIStogram:DATa?"
 WAVEFORM = "WAVFrm?"
 CURVE = "CURVe?"
-WF_OUTPREQ = "WFMOutpre?"
+WF_OUTPREQ = "WFMOutre?"
 WF_XINCRQ = "WFMOutpre:XINcr?"
 WF_XUNITQ = "WFMOutpre:XUNit?"
 WF_XZEROQ = "WFMOutpre:XZEro?"
@@ -211,7 +211,7 @@ class TektronixDPO4104BCommands(object):
     CH4 = "CH4"
 
 
-class RhodeSchwarzCommands(object):
+class RhodeSchwarzRTO1044Commands(object):
     """
     Namespace for the commands for the RhodeSchwarz oscilloscope
     """

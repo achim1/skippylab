@@ -25,7 +25,15 @@ def get_logger(loglevel,logfile=None):
 
     logger = logging.getLogger(__name__)
     logger.setLevel(loglevel)
-    ch = logging.StreamHandler()
+    ch = None
+    for h in logger.handlers:
+        if isinstance(h, logging.StreamHandler):
+            ch = h
+            break
+
+    if ch is None:
+        ch = logging.StreamHandler()
+
     ch.setLevel(loglevel)
     formatter = logging.Formatter(LOGFORMAT)
     ch.setFormatter(formatter)
@@ -55,6 +63,5 @@ def get_logger(loglevel,logfile=None):
     logger.addHandler(ch)
     if logfile is not None: logger.addHandler(fh)
     sys.excepthook = exception_handler
-    firstlog = " ".join(sys.argv)
-    logger.info("Starting " + firstlog)
+    logger.propagate = False
     return logger

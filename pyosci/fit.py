@@ -18,6 +18,7 @@ import dashi as d
 from . import tools
 from . import plotting as plt
 
+
 from scipy.constants import elementary_charge as ELEMENTARY_CHARGE
 d.visual()
 
@@ -51,7 +52,7 @@ def get_n_hit(charges, nbins):
     return n_hit, n_all
 
 
-    def calculate_mu(charges, nbins):
+def calculate_mu(charges, nbins):
     """
     Calculate mu out of
     P(hit) = (N_hit/N_all) = exp(QExCExLY)
@@ -59,7 +60,8 @@ def get_n_hit(charges, nbins):
     """
     n_hit, n_all = get_n_hit(charges, nbins)
     n_pedestal = n_all - n_hit
-    mu = -1 * np.log(n_pedestal / n_all)
+    #mu = -1 * np.log(n_pedestal / n_all)
+    mu = -1 * np.log(1 - (n_hit/n_all))
     return mu
 
 
@@ -209,6 +211,7 @@ class Model(object):
 
         def normed_func(*args, **kwargs):
             return norm*func(*args, **kwargs)
+
         self._callbacks = [normed_func]
         self.startparams = [*startparams]
         self.n_params = [len(startparams)]
@@ -278,7 +281,6 @@ class Model(object):
         self.startparams = self.startparams + other.startparams
         self.n_params = self.n_params + other.n_params
         self.best_fit_params = self.startparams
-        # self.best_fit_params = self.best_fit_params + other.best_fit_params
         return self
 
     @property
@@ -294,7 +296,7 @@ class Model(object):
             if self.all_coupled:
                 best_fit = self.best_fit_params[0:self.n_params[0]]
             yield lambda xs: tmpcmp(xs, *best_fit)
-        return thecomponents
+        #return thecomponents
 
     def __call__(self, xs, *params):
         """
