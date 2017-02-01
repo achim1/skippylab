@@ -40,61 +40,6 @@ except ImportError:
 # helpers
 
 
-class GaussMeterProxy(object):
-    """
-    Access gaussmeter data via the network
-
-    """
-
-    def __init__(self, ip, port, pull_interval=10):
-        """
-        Subscribe to a Gaussmeter which publishes data with a ZMQ publish socket.
-        Gaussmeter needs to publish at ip and port
-
-        Args:
-            ip (str): ip of gaussmeter (running goldschmidt instance)
-            port (int): port where guassmeter is publishing
-
-        Keyword Args:
-            pull_interval (int): pull data new data every pull_interval seconds, use
-            buffered value in between
-        """
-        context = zmq.Context()
-        self.socket = context.socket(zmq.SUB)
-        self.socket.setsockopt(zmq.SUBSCRIBE, b'GU3001D')
-        self.socket.setsockopt(zmq.CONFLATE, 1)
-        self.socket.connect("tcp://{}:{}".format(ip,port))
-        self.pattern = re.compile("GU3001D\s(?P<value>[0-9-.]*);\s+(?P<unit>(mG)|(uT))")
-        self.pull_interval = pull_interval
-        self.last_pull = None
-        self.buffer = self._pull_new()
-
-    def _pull_new(self):
-        """
-        Acquire new data
-
-        Returns:
-            dict
-        """
-        self.last_pull = time.monotonic()
-        try:
-            self.buffer = self.pattern.search(self.socket.recv().decode()).groupdict()
-        except Exception as e:
-            logger.debug("Problem acquiring data {}".format(e))
-        self.buffer["value"] = float(self.buffer["value"])
-        return self.buffer
-
-    def pull(self):
-        """
-        Get new data or returns the data in the buffer dependent on self.pull_interval
-
-        Returns:
-            dict
-        """
-        if time.monotonic() - self.last_pull > self.pull_interval:
-            return self._pull_new()
-        else:
-            return self.buffer
 
 
 
@@ -156,6 +101,9 @@ class DAQ(object):
     def acquire(self):
         """
         Go through the instrument list and trigger their pull methods to build an event
+
+        Keyword Args:
+            **pullkwargs (dict): will be passed on the individual pull methods
 
         Returns:
             pyosci.Event

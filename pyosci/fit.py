@@ -99,10 +99,53 @@ def calculate_gain(mu_ped, mu_spe, prefactor=1e-12):
     charge *= prefactor
     return charge/ELEMENTARY_CHARGE
 
+def chi2_exponential_part(xs, data, pred, mu_ped, mu_ser):
+    mask = np.logical_and(xs >= mu_ped, xs <= mu_ser)
+    data = data[mask]
+    pred = pred[mask]
+    xs   = xs[mask]
+    chi2_ndf = calculate_chi_square(data, pred)/len(xs)
+    return chi2_ndf
 
-def calculate_peak_to_valley_ratio(model):
+def calculate_peak_to_valley_ratio(bestfitmodel, mu_ped, mu_spe, control_plot=False):
+    """
+    Calculate the peak to valley ratio
+    Args:
+        bestfitmodel (fit.Model): A fitted model to charge response data
+        mu_ped (float): The x value of the fitted pedestal
+        mu_spe (flota): The x value of the fitted spe peak
+   
+    Keyword Args:
+        control_plot (bool): Show control plot to see if correct values are found
+   
+    """
+    
 
-    pass
+    tmpdata = bestfitmodel.prediction(bestfitmodel.xs)
+    valley = min(tmpdata[np.logical_and(bestfitmodel.xs > mu_ped,\
+                                    bestfitmodel.xs < mu_spe)])
+    valley_x = bestfitmodel.xs[tmpdata == valley]
+
+    peak = max(tmpdata[bestfitmodel.xs > valley_x])
+    peak_x = bestfitmodel.xs[tmpdata == peak]
+    peak_v_ratio = (peak/valley)
+    
+    if control_plot:
+        fig = p.figure()
+        ax = fig.gca()
+        ax.plot(bestfitmodel.xs,tmpdata)
+        print (valley)
+        print (valley_x)
+
+        ax.scatter(valley_x,valley,marker="o")
+        ax.scatter(peak_x, peak, marker="o")
+        ax.set_ylim(ymin=1e-4)
+        ax.set_yscale("log")
+        ax.grid(1)
+        sb.despine()
+
+    return peak_v_ratio
+
 
 def calculate_chi_square(data, model_data):
     """

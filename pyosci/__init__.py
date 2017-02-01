@@ -2,7 +2,7 @@
 Package to read out TektronixDPO4104B oscilloscope 
 """
 
-__version__ = "0.0.9"
+__version__ = "0.0.11"
 __all__ = ["daq", "osci", "plotting", "tools", "fit"]
 
 import appdirs as _appdirs

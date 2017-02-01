@@ -254,12 +254,13 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self._header_buff = False
         self._wf_buff = np.zeros(len(self.waveform_bins))
         # fill the buffer
-        self.pull()
+        self.fill_header_buffer()
+        self.fill_buffer()
 
     def fill_header_buffer(self):
         self._header_buff = self.wf_header()
 
-    def trigger_singl(self):
+    def trigger_single(self):
         self.acquire_mode = cmd.RUN_SINGLE
 
     def trigger_continuous(self):
@@ -561,8 +562,9 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         if bar_available:
             bar = pyprind.ProgBar(n, track_time=True, title='Acquiring waveforms...')
         if single_acquisition:
-            self.acquire_mode = cmd.RUN_SINGLE
-
+            self.trigger_single()
+        else:
+            self.trigger_continuous()
         wf_buff = 0
         while acquired < n:
             try:
@@ -622,13 +624,13 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             None
         """
 
-        wf = self.make_n_acquisitions(n)
+        wf = self.make_n_acquisitions(n, single_acquisition=False)
         head = self.wf_header()
         for i in range(len(wf)):
             try:
-                plotting.plot_waveform(head,wf[i])
+                plotting.plot_waveform(head, wf[i])
             except Exception as e:
-                print (e)
+                print(e)
 
         p.show()
 
@@ -641,11 +643,14 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         """
         self._wf_buff = self.acquire_waveform()
 
-
-    def pull(self, single_acquisition=False):
+    def pull(self, buff_header=True):
         """
         Fit in the API for the DAQ. Returns waveform data
 
+        Keyword Args:
+            buff_header (bool): buffer the header for subsequent acquisition without
+                                changing the parameters of the acquistion (much faster)
+            FIXME! Default value of this should be False, however requires DAQ API change
         Returns:
             dict
         """
@@ -653,7 +658,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         # waveform at all.
         data = dict()
         while True:
-            wf = self.acquire_waveform()
+            wf = self.acquire_waveform(buff_header=buff_header)
 
             if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
                 continue # flatline test
@@ -664,7 +669,10 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             else:
                 self._wf_buff = wf
                 break
-        data.update(self.wf_header())
+        if buff_header:
+            data.update(self._header_buff)
+        else:
+            data.update(self.wf_header())
         data["waveform"] = wf
         return data
 
