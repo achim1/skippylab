@@ -185,7 +185,9 @@ TRG_RATEQ = "TRIGger:FREQuency?"
 # command arguments
 
 RUN_CONTINOUS = "RUNSTop"
-RUN_SINGLE = "SEQuence"
+RUN_SINGLE = "SEQ" # sequence
+START_ACQUISITIONS = "RUN"
+ACQUIRE_ONE  = "ON"
 SNAP = "SNAP"
 DATA = "DATA"
 OFF = "0"

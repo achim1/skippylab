@@ -98,7 +98,7 @@ class DAQ(object):
 
         self.channels[label] = instrument
 
-    def acquire(self):
+    def acquire(self, *pullargs, **pullkwargs):
         """
         Go through the instrument list and trigger their pull methods to build an event
 
@@ -110,10 +110,11 @@ class DAQ(object):
         """
         event = Event()
         for key in self.channels.keys():
-            event.data[key] = self.channels[key].pull()
+            event.data[key] = self.channels[key].pull(*pullargs, **pullkwargs)
         return event
 
-    def acquire_n_events(self, n_events, trigger_hook=lambda x:x):
+    def acquire_n_events(self, n_events, trigger_hook=lambda x:x,\
+                         trigger_hook_args=(None,), pull_args=(), pull_kwargs={}):
         """
         Continuous acquisition. Acquires n events. Yields events. Use trigger hook to define a
         function to decide when data is returned.
@@ -121,7 +122,7 @@ class DAQ(object):
         Args:
             n_events (int): Number of events to acquire
             trigger_hook (callable): Trigger condition
-
+            trigger_hook_args (tuple): Arguments for the trigger condition
         Yields:
             Event
         """
@@ -129,10 +130,10 @@ class DAQ(object):
             bar = pyprind.ProgBar(n_events, track_time=True, title='Acquiring waveforms...')
 
         for __ in range(n_events):
-            trigger_hook()
+            trigger_hook(*trigger_hook_args)
             if bar_available:
                 bar.update()
-            yield self.acquire()
+            yield self.acquire(*pull_args, **pull_kwargs)
 
 
 

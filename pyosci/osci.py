@@ -253,6 +253,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self.active_channel = TCmd.CH1
         self._header_buff = False
         self._wf_buff = np.zeros(len(self.waveform_bins))
+        self._data_start_stop_buffer = (None, None)
         # fill the buffer
         self.fill_header_buffer()
         self.fill_buffer()
@@ -265,6 +266,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
 
     def trigger_continuous(self):
         self.acquire_mode = cmd.RUN_CONTINOUS
+        self.acquire = cmd.START_ACQUISITIONS
 
     def _trigger_acquire(self):
         """
@@ -329,6 +331,15 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self.logger.info("Selecting channel {}".format(self.source))
         return None
 
+    def _select_active_channel(self):
+        """
+        Pick the channel which is intended to be used
+
+        Returns:
+
+        """
+        self.source = self.active_channel
+
     @property
     def samplingrate(self):
         """
@@ -371,6 +382,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
                                     # "npoints" later
         head = self.wf_header()
         self.set_acquisition_window(0, head["npoints"])
+
 
     @property
     def time_binwidth(self):
@@ -506,7 +518,20 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self.data_start = start
         self.data_stop = stop
         self._wf_buff = np.zeros(len(self.waveform_bins))
+        self._data_start_stop_buffer = (start, stop)
         self.logger.info("Set acquisition window to {} - {}".format(self.data_start, self.data_stop))
+
+    def set_acquisition_window_from_internal_buffer(self):
+        """
+        Use the internal buffer to set the data acquisition window. Might be necessary
+        if the channel was switched in the meantime
+
+        Returns:
+            None
+        """
+        self.data_start, self.data_stop = self._data_start_stop_buffer
+        #self.fill_header_buffer()
+        #self.fill_bu
 
     def set_feature_acquisition_window(self, leading, trailing, n_waveforms=20):
         """
@@ -605,7 +630,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
 
         """
 
-        wf = self.make_n_acquisitions(n)
+        wf = self.make_n_acquisitions(n, single_acquisition=False)
         xs = self.waveform_times
         len_wf = [len(w) for w in wf]
         wf = [w for w in wf if len(w) == min(len_wf)]
@@ -643,7 +668,9 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         """
         self._wf_buff = self.acquire_waveform()
 
-    def pull(self, buff_header=True):
+
+    def pull(self, buff_header=True, use_buffered_acq_window=True,
+             use_channel_info=True):
         """
         Fit in the API for the DAQ. Returns waveform data
 
@@ -651,24 +678,35 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             buff_header (bool): buffer the header for subsequent acquisition without
                                 changing the parameters of the acquistion (much faster)
             FIXME! Default value of this should be False, however requires DAQ API change
+            use_buffered_acq_window (bool): set this flag to cache the length of the acquisition window
+                                            internally so that it does not get resetted when switching channels
+            use_channel_info (bool): select the channel on each submit
         Returns:
             dict
         """
+        user_error_msg = """ This pull method is designed to be used in single acquisition mode."""
+
+        assert self.acquire_mode == cmd.RUN_SINGLE, user_error_msg
+
         # FIXME: The buffer mechanism fails if this is the first
         # waveform at all.
         data = dict()
-        while True:
-            wf = self.acquire_waveform(buff_header=buff_header)
+        if use_channel_info:
+            self._select_active_channel()
+        if use_buffered_acq_window:
+            self.set_acquisition_window_from_internal_buffer()
+        #while True:
+        wf = self.acquire_waveform(buff_header=buff_header)
 
-            if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
-                continue # flatline test
-            elif (wf - self._wf_buff).sum() == 0:
-                self._wf_buff = wf
-                continue # test if scope just returned the
-                         # same waveform again
-            else:
-                self._wf_buff = wf
-                break
+            #if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
+            #    continue # flatline test
+            #elif (wf - self._wf_buff).sum() == 0:
+            #    self._wf_buff = wf
+            #    continue # test if scope just returned the
+            #             # same waveform again
+            #else:
+            #    self._wf_buff = wf
+            #    break
         if buff_header:
             data.update(self._header_buff)
         else:
