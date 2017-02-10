@@ -1,5 +1,5 @@
 """
-Communicate with oscilloscope via vxi11 protocoll over LAN network
+Communicate with oscilloscope via vxi11 protocol over LAN network
 """
 
 
@@ -36,8 +36,6 @@ except ImportError:
 from functools import reduce
 
 # abbreviations
-#dec = cmd.decode
-#enc = cmd.encode
 aarg = cmd.add_arg
 q = cmd.query
 
@@ -240,10 +238,11 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     data_start = setget(cmd.DATA_START)
     data_stop = setget(cmd.DATA_STOP)
     waveform_enc = setget(cmd.WF_ENC)
-    fast_acquisition = setget(cmd.ACQUIRE_FAST_STATE)
+    #fast_acquisition = setget(cmd.ACQUIRE_FAST_STATE)
     acquire = setget(cmd.RUN)
-    acquire_mode = setget(cmd.ACQUIRE_STOP)
+    acquire_mode = setget(TCmd.ACQUISITON_MODE)
     data = setget(cmd.DATA)
+    trigger_frequency_enabled = setget(TCmd.TRIGGER_FREQUENCY_ENABLED)
     histbox = setget(cmd.HISTBOX)
     histstart = setget(cmd.HISTSTART)
     histend = setget(cmd.HISTEND)
@@ -254,6 +253,11 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self._header_buff = False
         self._wf_buff = np.zeros(len(self.waveform_bins))
         self._data_start_stop_buffer = (None, None)
+
+        # FIXME: future extension
+        self._is_running = False
+        self._acquisition_single = False
+
         # fill the buffer
         self.fill_header_buffer()
         self.fill_buffer()
@@ -353,22 +357,22 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         return 1./head["xincr"]
 
     @property
-    def triggerrate(self):
+    def trigggerrate(self):
         """
-        The rate the scope is triggering. This number is provided
-        by the scope. Most times it is nan though...
+        The rate the scope is triggering. The scope in principle provides this number,
+        however we have to work around it as it does not work reliably
+
+        Keyword Arguments:
+            interval (int): time interval to integrate measurement over in seconds
 
         Returns:
             float
         """
-        trg_rate = self._send(cmd.TRG_RATEQ)
-        trg_rate = float(trg_rate)
-        # from the osci docs
-        # the IEEE Not A Number (NaN = 99.10E+36)
-        if trg_rate > 1e35:
-            trg_rate = np.nan
-        self.logger.debug("Got triggerrate of {:4.2e}".format(trg_rate))
-        return trg_rate
+        self.logger.warning("The returned value is instantanious!\n "
+                            "For serious measurements, gather some statistics!")
+        self.trigger_frequency_enabled = cmd.TektronixDPO4104BCommands.ON
+        freq = float(self._send(cmd.TektronixDPO4104BCommands.TRIGGER_FREQUENCYQ))
+        return freq
 
     def reset_acquisition_window(self):
         """

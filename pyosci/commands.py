@@ -187,11 +187,15 @@ TRG_RATEQ = "TRIGger:FREQuency?"
 RUN_CONTINOUS = "RUNSTop"
 RUN_SINGLE = "SEQ" # sequence
 START_ACQUISITIONS = "RUN"
-ACQUIRE_ONE  = "ON"
+STOP_ACQUISITIONS = "STOP"
+N_ACQUISITIONS = "ACQuire:NUMACq?"
+ACQUIRE_ONE = "ON"
 SNAP = "SNAP"
 DATA = "DATA"
 OFF = "0"
 ON = "1"
+
+
 
 ASCII = "ASCii"
 BINARY = "BINary"
@@ -211,7 +215,13 @@ class TektronixDPO4104BCommands(object):
     CH2 = "CH2"
     CH3 = "CH3"
     CH4 = "CH4"
-
+    ON = "ON"
+    OFF = "OFF"
+    ONE = "1"
+    ZERO = "0"
+    TRIGGER_FREQUENCY_ENABLED = "DISplay:TRIGFrequency"
+    TRIGGER_FREQUENCYQ = "TRIGger:FREQuency?"
+    ACQUISITON_MODE = "ACQuire:STOPAfter"
 
 class RhodeSchwarzRTO1044Commands(object):
     """

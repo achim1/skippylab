@@ -99,6 +99,7 @@ def calculate_gain(mu_ped, mu_spe, prefactor=1e-12):
     charge *= prefactor
     return charge/ELEMENTARY_CHARGE
 
+
 def chi2_exponential_part(xs, data, pred, mu_ped, mu_ser):
     mask = np.logical_and(xs >= mu_ped, xs <= mu_ser)
     data = data[mask]
@@ -106,6 +107,7 @@ def chi2_exponential_part(xs, data, pred, mu_ped, mu_ser):
     xs   = xs[mask]
     chi2_ndf = calculate_chi_square(data, pred)/len(xs)
     return chi2_ndf
+
 
 def calculate_peak_to_valley_ratio(bestfitmodel, mu_ped, mu_spe, control_plot=False):
     """
