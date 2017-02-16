@@ -234,3 +234,21 @@ class RhodeSchwarzRTO1044Commands(object):
     WAVEFORM = "DATA?"
     WF_HEADER = "DATA:HEADer?"
     CURVE = "DATA:VALues?"
+
+class KeysightE3631APowerSupplyCommands(object):
+    """
+    Namespace for the commands of the KeysightE3631APowerSupply
+    """
+    ERROR_STATEQ = "SYST:ERR?"
+    OUTPUT = "OUTPUT:STATE"
+    ON = "ON"
+    OFF = "OFF"
+    P6 = "P6V" # the 6V channel
+    P25 = "P25V" # the 25V channel
+    N25 = "N25V" # the 25V channel but with negative polarity
+    APPLY = "APPLY"
+    CHANNEL = "INST"
+    VOLT = "VOLT"
+    MEASURE = "MEASURE"
+    CURRENT = "CURRENT"
+    DC = "DC"

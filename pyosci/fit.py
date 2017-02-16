@@ -493,6 +493,7 @@ class Model(object):
 
     def plot_result(self, ymin=1000,xmax=8, ylabel="normed bincount",\
                     xlabel="Q [C]", fig=None,\
+                    log=True,\
                     model_alpha=.3,\
                     add_parameter_text=((r"$\mu_{{SPE}}$& {:4.2e}\\",0),)):
         """
@@ -504,6 +505,7 @@ class Model(object):
             model_alpha (float): 0 <= x <= 1 the alpha value of the lineplot
                                 for the model
             ylabel (str): label for yaxis
+            log (bool): plot in log scale
             fig (pylab.figure): A figure instance
             add_parameter_text (tuple): Display a parameter in the table on the plot
                                         ((text, parameter_number), (text, parameter_number),...)
@@ -518,7 +520,7 @@ class Model(object):
         for comp in self.components:
             ax.plot(self.xs, comp(self.xs), linestyle=":", lw=1, color="k")
 
-        ax.set_yscale("log")
+        if log: ax.set_yscale("log")
         ax.set_ylim(ymin=ymin)
         ax.set_xlim(xmax=xmax)
         ax.set_xlabel(xlabel)
@@ -590,6 +592,7 @@ def pedestal_fit(filename, nbins, fig=None):
     # xs = self.data.bincenters
     return ped_mod
 
+################################################
 
 def fit_model(charges, model, startparams=None, \
               rej_outliers=False, nbins=200, \
@@ -684,6 +687,9 @@ def fit_model(charges, model, startparams=None, \
     print("Best fit parameters {}".format(best_fit_params))
 
     return model
+
+############################################
+
 
 
 if __name__ == "__main__":

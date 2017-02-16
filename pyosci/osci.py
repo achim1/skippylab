@@ -1,8 +1,6 @@
 """
 Communicate with oscilloscope via vxi11 protocol over LAN network
 """
-
-
 import abc
 import time
 import numpy as np
@@ -60,7 +58,7 @@ def setget(command):
                     lambda self, value: self._set(aarg(command, value)))
 
 
-class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta,object)):
+class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
     """
     A oscilloscope with a high sampling rate in the order of several
     gigasamples. Defines the scope API the DAQ reiles on
@@ -368,10 +366,10 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         Returns:
             float
         """
-        self.logger.warning("The returned value is instantanious!\n "
+        self.logger.debug("The returned value is instantanious!\n "
                             "For serious measurements, gather some statistics!")
-        self.trigger_frequency_enabled = cmd.TektronixDPO4104BCommands.ON
-        freq = float(self._send(cmd.TektronixDPO4104BCommands.TRIGGER_FREQUENCYQ))
+        self.trigger_frequency_enabled = TCmd.ON
+        freq = float(self._send(TCmd.TRIGGER_FREQUENCYQ))
         return freq
 
     def reset_acquisition_window(self):
@@ -386,7 +384,6 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
                                     # "npoints" later
         head = self.wf_header()
         self.set_acquisition_window(0, head["npoints"])
-
 
     @property
     def time_binwidth(self):
