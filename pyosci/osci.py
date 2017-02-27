@@ -63,6 +63,11 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
     A oscilloscope with a high sampling rate in the order of several
     gigasamples. Defines the scope API the DAQ reiles on
     """
+    # constants used by the socket connection
+    MAXTRIALS = 5
+    CONTINOUS_RUN = cmd.RUN_CONTINOUS
+    ACQUIRE_ONE = cmd.RUN_SINGLE
+
 
     def __init__(self, ip="169.254.68.19", loglevel=20):
         """
@@ -134,6 +139,46 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         self.logger.info("Scope responds to {} with {}".format(cmd.WHOAMI, ping))
         return True if ping else False
 
+    # def run(self):
+    #     """
+    #     Start data acquisition
+    #
+    #     Returns:
+    #         None
+    #     """
+    #     self.logger.debug("Starting data acquisition")
+    #     assert self.acquire_mode == cmd.RUN_CONTINOUS,\
+    #                                 "Run is ment to use with continous acquisition!Set self.acquire_mode accordingly"
+    #     self.acquire = cmd.START_ACQUISITIONS
+    #
+    # def stop(self):
+    #     """
+    #     Stop any ongoing data acquisition
+    #
+    #     Returns:
+    #         None
+    #     """
+    #     self.acquire = cmd.STOP_ACQUISITIONS
+    #
+    # def do_single_acquisition(self):
+    #     """
+    #     Acquire a single event
+    #
+    #     Returns:
+    #         None
+    #     """
+    #     assert self.acquire == cmd.RUN_SINGLE, "Set scope to single acquistion mode first!"
+    #     return self.acquire_waveform()
+    #
+    # def do_single_acquisition_fast(self):
+    #     """
+    #     Acquire a single event. FAST mode (no check)
+    #
+    #     Returns:
+    #
+    #     """
+    #     return self.acquire_waveform()
+
     def __repr__(self):
         """
         String representation of the scope
@@ -162,6 +207,10 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         Returns:
             float (GSamples/sec)
         """
+        return
+
+    @abc.abstractmethod
+    def acquire_waveform(self):
         return
 
     def __del__(self):
@@ -227,8 +276,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     Oscilloscope of type DPO4104B manufactured by Tektronix
     """
 
-    # constants used by the socket connection
-    MAXTRIALS = 5
+
 
 
     # setget properties
@@ -239,6 +287,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     #fast_acquisition = setget(cmd.ACQUIRE_FAST_STATE)
     acquire = setget(cmd.RUN)
     acquire_mode = setget(TCmd.ACQUISITON_MODE)
+
     data = setget(cmd.DATA)
     trigger_frequency_enabled = setget(TCmd.TRIGGER_FREQUENCY_ENABLED)
     histbox = setget(cmd.HISTBOX)
@@ -355,7 +404,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         return 1./head["xincr"]
 
     @property
-    def trigggerrate(self):
+    def triggerrate(self):
         """
         The rate the scope is triggering. The scope in principle provides this number,
         however we have to work around it as it does not work reliably
@@ -367,7 +416,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             float
         """
         self.logger.debug("The returned value is instantanious!\n "
-                            "For serious measurements, gather some statistics!")
+                          "For serious measurements, gather some statistics!")
         self.trigger_frequency_enabled = TCmd.ON
         freq = float(self._send(TCmd.TRIGGER_FREQUENCYQ))
         return freq
@@ -724,6 +773,7 @@ class RhodeSchwarzRTO1044(AbstractBaseOscilloscope):
     def __init__(self, ip):
         AbstractBaseOscilloscope.__init__(self,ip)
         self.active_channel = RSCmd.CH1
+        self.run_start_time = None
 
     def select_channel(self, channel):
         """
@@ -738,17 +788,54 @@ class RhodeSchwarzRTO1044(AbstractBaseOscilloscope):
         channel_dict = {1: RSCmd.CH1, 2: RSCmd.CH2, 3: RSCmd.CH3, 4: RSCmd.CH4}
         self.active_channel = channel_dict[channel]
 
-    def get_waveform(self):
+    def acquire_waveform(self):
         """
         Get the voltage values for a single waveform
 
         Returns:
             np.ndarray
         """
-        wf_commnad = aarg(self.active_channel,RSCmd.CURVE)
+        wf_command = aarg(self.active_channel,RSCmd.CURVE)
         raw_wf = self._send(wf_command)
         pairs = izip(*[iter(raw_wf.split(","))]*2)
         times, volts = [],[]
         for val in pairs:
             volts.append(float(val[1]))
         return np.array(volts)
+
+    @property
+    def samplingrate(self):
+        raise NotImplementedError
+
+    def run(self):
+        """
+        Start continuous acquisitions
+
+        Returns:
+
+        """
+        self._set(RSCmd.RUN)
+        self.run_start_time = time.monotonic()
+
+    def stop(self):
+        self._set(RSCmd.STOP)
+
+    def do_single_acquisition(self):
+        self._set(RSCmd.SINGLE)
+
+    @property
+    def triggerrate(self):
+        """
+        Get the triggerrate of the scope
+
+        Args:
+            interval (float): measurement time in seconds to
+
+        Returns:
+            float
+        """
+
+        nacq = self._send(RSCmd.N_ACQUISITONS)
+        interval = time.monotonic() - self.run_start_time
+        return float(nacq/interval)
+

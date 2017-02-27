@@ -26,12 +26,11 @@ q = cmd.query
 
 class KeysightE3631APowerSupply(object):
     """
-    A low volgage power supply with two channels, +6V and +- 25V manufactured
+    A low voltage power supply with two channels, +6V and +- 25V manufactured
     by Keysight. The power supply does not have an ethernet port, so the
     connection is done via GPIB and a prologix GPIB Ethernet connector
     """
     output = setget(KCmd.OUTPUT)
-
 
     def __init__(self, ip="10.25.124.252", gpib_address=5, loglevel=20):
         """
@@ -144,7 +143,6 @@ class KeysightE3631APowerSupply(object):
         if (channel == self.P6) and (voltage > 6.18):
             raise ValueError("6V Channel does not support {}".format(voltage))
         self._set(KCmd.VOLT + " {}".format(voltage))
-
 
     def off(self):
         """

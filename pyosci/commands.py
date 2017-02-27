@@ -188,7 +188,7 @@ RUN_CONTINOUS = "RUNSTop"
 RUN_SINGLE = "SEQ" # sequence
 START_ACQUISITIONS = "RUN"
 STOP_ACQUISITIONS = "STOP"
-N_ACQUISITIONS = "ACQuire:NUMACq?"
+
 ACQUIRE_ONE = "ON"
 SNAP = "SNAP"
 DATA = "DATA"
@@ -222,6 +222,7 @@ class TektronixDPO4104BCommands(object):
     TRIGGER_FREQUENCY_ENABLED = "DISplay:TRIGFrequency"
     TRIGGER_FREQUENCYQ = "TRIGger:FREQuency?"
     ACQUISITON_MODE = "ACQuire:STOPAfter"
+    N_ACQUISITIONS = "ACQuire:NUMACq?"
 
 class RhodeSchwarzRTO1044Commands(object):
     """
@@ -234,6 +235,10 @@ class RhodeSchwarzRTO1044Commands(object):
     WAVEFORM = "DATA?"
     WF_HEADER = "DATA:HEADer?"
     CURVE = "DATA:VALues?"
+    N_ACQUISITONS = "ACQuire:CURRent?"
+    RUN = "RUN"
+    SINGLE = "SINGLE"
+    STOP = "STOP"
 
 class KeysightE3631APowerSupplyCommands(object):
     """

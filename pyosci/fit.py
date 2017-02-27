@@ -45,10 +45,11 @@ def get_n_hit(charges, nbins):
     """
     one_gauss = lambda x, n, y, z: n * gauss(x, y, z, 1)
     ped_mod = Model(one_gauss, (1000, -.1, 1))
-    ped_mod.fit_to_data(charges, nbins, normalize=False, silent=False)
-    n_hit = abs(ped_mod.data.bincontent - ped_mod.prediction(ped_mod.xs)).sum()
-    n_pedestal = ped_mod.data.stats.nentries - n_hit
-    n_all = ped_mod.data.stats.nentries
+    ped_mod.add_data(charges, nbins=nbins, normalize=False, create_distribution=True )
+    ped_mod.fit_to_data(silent=True)
+    n_hit = abs(ped_mod.data - ped_mod.prediction(ped_mod.xs)).sum()
+    n_pedestal = ped_mod._distribution.stats.nentries - n_hit
+    n_all = ped_mod._distribution.stats.nentries
     return n_hit, n_all
 
 
@@ -95,7 +96,7 @@ def calculate_gain(mu_ped, mu_spe, prefactor=1e-12):
     Returns:
         float
     """
-    charge =  abs(mu_spe) - abs(mu_ped)
+    charge = abs(mu_spe) - abs(mu_ped)
     charge *= prefactor
     return charge/ELEMENTARY_CHARGE
 
@@ -237,7 +238,7 @@ class Model(object):
 
     """
 
-    def __init__(self, func, startparams=None, norm=1):
+    def __init__(self, func, startparams=None, func_norm=1):
         """
         Initialize a new model
 
@@ -255,7 +256,7 @@ class Model(object):
             startparams = [0]*func.__code__.co_argcount
 
         def normed_func(*args, **kwargs):
-            return norm*func(*args, **kwargs)
+            return func_norm*func(*args, **kwargs)
 
         self._callbacks = [normed_func]
         self.startparams = [*startparams]
@@ -267,10 +268,35 @@ class Model(object):
         self.xs = None
         self.chi2_ndf = None
         self.chi2_ndf_components = []
-        self.norm = None
+        self.norm = 1
+        self.ndf = 1
         self.prediction = lambda xs: reduce(lambda x, y: x + y,\
                                   [f(xs) for f in self.components])
         self.first_guess = None
+        self._distribution = None
+
+    def _create_distribution(self,data, nbins, normalize=False):
+        """
+        Create a distribution
+
+        Returns:
+            None
+        """
+        bins = np.linspace(min(data), max(data), nbins)
+
+        h = d.factory.hist1d(data, bins)
+        self._distribution = h
+
+        self.norm = 1
+        if normalize:
+            h_norm = h.normalized(density=True)
+            norm = h.bincontent / h_norm.bincontent
+            norm = norm[np.isfinite(norm)][0]
+            self.norm = norm
+            self._distribution = h_norm
+
+        self.data = self._distribution.bincontent
+        self.xs = self._distribution.bincenters
 
     def add_first_guess(self, func):
         """
@@ -288,6 +314,14 @@ class Model(object):
         self.first_guess = func
 
     def eval_first_guess(self, data):
+        """
+        Assign a new set of start parameters obtained by calling the
+        first geuss metthod
+
+        :param data:
+        :return:
+        """
+        assert self.first_guess is not None, "No first guess method provided! Run Model.add_first_guess "
         self.startparams = self.first_guess(data)
 
     def couple_models(self, coupling_variable):
@@ -322,6 +356,16 @@ class Model(object):
         startparams = self.startparams[0:self.n_params[0]]
 
     def __add__(self, other):
+        """
+        Add another component to the model
+
+        Args:
+            other:
+
+        Returns:
+
+        """
+
         self._callbacks = self._callbacks + other._callbacks
         self.startparams = self.startparams + other.startparams
         self.n_params = self.n_params + other.n_params
@@ -341,11 +385,10 @@ class Model(object):
             if self.all_coupled:
                 best_fit = self.best_fit_params[0:self.n_params[0]]
             yield lambda xs: tmpcmp(xs, *best_fit)
-        #return thecomponents
 
     def __call__(self, xs, *params):
         """
-        Give the model prediction
+        Return the model prediction
 
         Args:
             xs (np.ndaarray): the values the model should be evaluated on
@@ -372,34 +415,44 @@ class Model(object):
             first += cmp(xs, *theparams)
         return first
 
-    def add_data(self, data, nbins, subtract = None):
+    def add_data(self, data, nbins=200,\
+                 create_distribution=False,\
+                 normalize=False,\
+                 xs=None,\
+                 subtract=None):
         """
         Add some data to the model, in preparation for the fit
 
 
         Args:
-            data:
-            nbins:
-            subtract:
+            data (np.array):
+
+        Keyword Args
+            nbins (int):
+            subtract (callable):
+            normalize (bool): normalize the data before adding
 
         Returns:
 
         """
-        bins = np.linspace(min(data), max(data), nbins)
-        self.data = d.factory.hist1d(data, bins).normalized(density=True)
-        self.xs = self.data.bincenters
+        if create_distribution:
+            self._create_distribution(data, nbins, normalize)
+            self.ndf = nbins - len(self.startparams)
+        else:
+            assert xs is not None, "Have to give xs if not histogramming!" 
+            self.data = data
+            self.xs = xs
+            self.ndf = len(data) - len(self.startparams)
+        if subtract is not None:
+            self.data -= subtract(self.xs)
 
-    def fit_to_data(self, data, nbins, silent=False, subtract=None,\
-                    normalize=True, **kwargs):
+    def fit_to_data(self, silent=False, **kwargs):
         """
         Apply this model to data
 
         Args:
             data (np.ndarray): the data, unbinned
-            nbins (int): number of bins to put the data in
             silent (bool): silence output
-            subtract (func): subtract this from the data before fitting
-            normalize (bool): normalize data before fitting
             **kwargs: will be passed on to scipy.optimize.curvefit
 
         Returns:
@@ -426,20 +479,21 @@ class Model(object):
             return first
 
         startparams = self.startparams
-        #if self.all_coupled:
-        #    startparams = self.startparams[0:self.n_params[0]]
-        bins = np.linspace(min(data), max(data), nbins)
-        self.data = d.factory.hist1d(data, bins)
-        if normalize:
-            self.data = self.data.normalized(density=True)
-        self.xs = self.data.bincenters
+        ## if self.all_coupled:
+        ##     startparams = self.startparams[0:self.n_params[0]]
 
-        h = d.factory.hist1d(data, bins)
-        h_norm = h.normalized(density=True)
-        xs = h_norm.bincenters
-        data = self.data.bincontent
-        if subtract is not None:
-            data -= subtract(self.xs)
+        #bins = np.linspace(min(data), max(data), nbins)
+        #self.data = d.factory.hist1d(data, bins)
+        #if normalize:
+        #    self.data = self.data.normalized(density=True)
+        #self.xs = self.data.bincenters
+
+        #h = d.factory.hist1d(data, bins)
+        #h_norm = h.normalized(density=True)
+        #xs = h_norm.bincenters
+        #data = self.data.bincontent
+
+
 
         if not silent: print("Using start params...", startparams)
 
@@ -450,7 +504,7 @@ class Model(object):
             fitkwargs["max_nfev"] = 1000000
         fitkwargs.update(kwargs)
         parameters, covariance_matrix = optimize.curve_fit(model, self.xs,\
-                                                           data, p0=startparams,\
+                                                           self.data, p0=startparams,\
                                                            # bounds=(np.array([0, 0, 0, 0, 0] + [0]*len(start_params[5:])),\
                                                            # np.array([np.inf, np.inf, np.inf, np.inf, np.inf] +\
                                                            # [np.inf]*len(start_params[5:]))),\
@@ -463,21 +517,21 @@ class Model(object):
         if not silent: print("##########################################")
 
         # simple GOF
-        norm = 1
-        if normalize:
-            norm = h.bincontent / h_norm.bincontent
-            norm = norm[np.isfinite(norm)][0]
+        #norm = 1
+        #if normalize:
+        #    norm = h.bincontent / h_norm.bincontent
+        #    norm = norm[np.isfinite(norm)][0]
 
-        self.norm = norm
-        chi2 = (calculate_chi_square(h.bincontent, norm * model(h.bincenters, *parameters)))
-        self.chi2_ndf = chi2/nbins
+        #self.norm = norm
+        chi2 = (calculate_chi_square(self.data, self.norm * model(self.xs, *parameters)))
+        self.chi2_ndf = chi2/self.ndf
 
         # FIXME: new feature
         #for cmp in self.components:
         #    thischi2 = (calculate_chi_square(h.bincontent, norm * cmp(h.bincenters)))
         #    self.chi2_ndf_components.append(thischi2/nbins)
 
-        if not silent: print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, chi2 / nbins))
+        if not silent: print("Obtained chi2 and chi2/ndf of {:4.2f} {:4.2f}".format(chi2, self.chi2_ndf))
         self.best_fit_params = parameters
         return parameters
         #self.best_fit_params = fit_model(data, nbins, model, startparams, **kwargs)
@@ -491,7 +545,7 @@ class Model(object):
         """
         self.__init__(self._callbacks[0], self.startparams[:self.n_params])
 
-    def plot_result(self, ymin=1000,xmax=8, ylabel="normed bincount",\
+    def plot_result(self, ymin=1000, xmax=8, ylabel="normed bincount",\
                     xlabel="Q [C]", fig=None,\
                     log=True,\
                     model_alpha=.3,\
@@ -515,7 +569,11 @@ class Model(object):
         if fig is None:
             fig = p.figure()
         ax = fig.gca()
-        self.data.scatter(color="k")
+        if self._distribution is not None:
+            self._distribution.scatter(color="k")
+        else:
+            ax.plot(self.xs, self.data, color="k")
+
         ax.plot(self.xs, self.prediction(self.xs), color=PALETTE[2], alpha=model_alpha)
         for comp in self.components:
             ax.plot(self.xs, comp(self.xs), linestyle=":", lw=1, color="k")
@@ -527,7 +585,8 @@ class Model(object):
         ax.set_ylabel(ylabel)
         infotext = r"\begin{tabular}{ll}"
         infotext += r"$\chi^2/ndf$ & {:4.2f}\\".format(self.chi2_ndf)
-        infotext += r"entries& {}\\".format(self.data.stats.nentries)
+        if self._distribution is not None:
+            infotext += r"entries& {}\\".format(self._distribution.stats.nentries)
         if add_parameter_text is not None:
             for partext in add_parameter_text:
                 infotext += partext[0].format(self.best_fit_params[partext[1]])
@@ -566,7 +625,8 @@ def pedestal_fit(filename, nbins, fig=None):
     p.savefig(filename.replace(".npy", ".wf.pdf"))
     one_gauss = lambda x, n, y, z: n * fit.gauss(x, y, z, 1)
     ped_mod = fit.Model(one_gauss, (1000, -.1, 1))
-    ped_mod.fit_to_data(charges, nbins, normalize=False)
+    ped_mod.add_data(charges, nbins, normalize=False)
+    ped_mod.fit_to_data(silent=True)
     fig = ped_mod.plot_result(add_parameter_text=((r"$\mu_{{ped}}$& {:4.2e}\\", 1), \
                                                   (r"$\sigma_{{ped}}$& {:4.2e}\\", 2)), \
                               xlabel=r"$Q$ [pC]", ymin=1, xmax=8, model_alpha=.2, fig=fig, ylabel="events")
@@ -589,7 +649,7 @@ def pedestal_fit(filename, nbins, fig=None):
     ax.fill_between(ped_mod.xs, 1e-4, ped_mod.prediction(ped_mod.xs),\
                     facecolor=PALETTE[2], alpha=.2)
     p.savefig(filename.replace(".npy", ".pdf"))
-    # xs = self.data.bincenters
+
     return ped_mod
 
 ################################################
@@ -677,7 +737,9 @@ def fit_model(charges, model, startparams=None, \
         m.migrad()
     else:
         model.startparams = startparams
-        model.fit_to_data(charges, nbins,normalize=normalize, silent=silent, **kwargs)
+        model.add_data(charges, nbins=nbins, normalize=normalize,\
+                       create_distribution=True)
+        model.fit_to_data(silent=silent, **kwargs)
 
     # check for named tuple
     if hasattr(startparams, "_make"): # duck typing
