@@ -68,5 +68,8 @@ def load_waveform(filename):
     Returns:
         dict
     """
+    if not filename.endswith(".npy"):
+        filename += ".npy"
+
     head, wf = np.load(filename)
     return head, wf
