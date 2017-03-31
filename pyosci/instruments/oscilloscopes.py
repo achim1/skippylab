@@ -1,5 +1,6 @@
 """
 Communicate with oscilloscope via vxi11 protocol over LAN network
+
 """
 import abc
 import time
@@ -8,10 +9,10 @@ import pylab as p
 import vxi11
 from six import with_metaclass
 
-from . import commands as cmd
-from . import logging
-from . import plotting
-from . import tools
+from .. scpi import commands as cmd
+from .. import logging
+from .. import plotting
+from .. import tools
 
 from copy import copy
 
@@ -22,7 +23,6 @@ try:
     bar_available = True
 except ImportError:
     pass
-    #logger.warning("No pyprind available")
 
 try:
     # Python 2
@@ -67,7 +67,6 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
     MAXTRIALS = 5
     CONTINOUS_RUN = cmd.RUN_CONTINOUS
     ACQUIRE_ONE = cmd.RUN_SINGLE
-
 
     def __init__(self, ip="169.254.68.19", loglevel=20):
         """
@@ -270,21 +269,28 @@ class Waveform(object):
         """
         return
 
+    @property
+    def header(self):
+        pass
+
+#class ScopeInternalBuffer(object):
+#    """
+#    Holds several internal states for
+#
+#
+#    """
+
 
 class TektronixDPO4104B(AbstractBaseOscilloscope):
     """
     Oscilloscope of type DPO4104B manufactured by Tektronix
     """
 
-
-
-
     # setget properties
     source = setget(cmd.SOURCE)
     data_start = setget(cmd.DATA_START)
     data_stop = setget(cmd.DATA_STOP)
     waveform_enc = setget(cmd.WF_ENC)
-    #fast_acquisition = setget(cmd.ACQUIRE_FAST_STATE)
     acquire = setget(cmd.RUN)
     acquire_mode = setget(TCmd.ACQUISITON_MODE)
 
@@ -304,6 +310,9 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         # FIXME: future extension
         self._is_running = False
         self._acquisition_single = False
+
+        # prepare the scope
+        self.waveform_enc = cmd.ASCII
 
         # fill the buffer
         self.fill_header_buffer()
@@ -777,7 +786,7 @@ class RhodeSchwarzRTO1044(AbstractBaseOscilloscope):
 
     def select_channel(self, channel):
         """
-        Select the channel for the readout
+        Select the channel for the readout.
 
         Args:
             channel (int): Channel number (1-4)

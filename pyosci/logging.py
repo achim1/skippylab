@@ -6,6 +6,8 @@ import sys
 import logging
 import os
 
+from datetime import datetime
+
 LOGFORMAT = '[%(asctime)s] %(levelname)s: %(module)s(%(lineno)d):   %(message)s'
 
 

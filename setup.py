@@ -28,7 +28,7 @@ setup(name='pyosci',
       keywords=["oscilloscope", "daq",\
                 "TektronixDPO4104B", "Tektronix",\
                 "readout", "physics", "engineering", "SCPI", "VISA"],
-      packages=['pyosci'],
+      packages=['pyosci', 'pyosci.instruments', 'pyosci.scpi'],
       #scripts=[],
       package_data={'pyosci': ['pyoscidefault.mplstyle','pyoscipresent.mplstyle']}
       )

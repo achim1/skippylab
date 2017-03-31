@@ -6,7 +6,7 @@ import time
 
 from plx_gpib_ethernet import PrologixGPIBEthernet
 
-from . import osci
+from . import oscilloscopes as osci
 from . import commands as cmd
 from . import logging
 

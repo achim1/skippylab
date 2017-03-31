@@ -3,7 +3,7 @@ Package to read out TektronixDPO4104B oscilloscope
 """
 
 __version__ = "0.0.15"
-__all__ = ["daq", "osci", "plotting", "tools"]
+__all__ = ["instruments", "scpi", "plotting", "tools"]
 
 import appdirs as _appdirs
 import shutil as _shutil
@@ -12,6 +12,8 @@ import os as _os
 from matplotlib import get_configdir as mpl_configdir
 
 from . import logging
+##from . import instruments
+#from . import scpi
 
 _appdir = _os.path.split(__file__)[0]
 _appname = _os.path.split(_appdir)[1]
