@@ -1,6 +1,6 @@
-from . import osci
+from . import oscilloscopes
 
-class Agilent33220A(osci.AbstractBaseOscilloscope):
+class Agilent33220A(oscilloscopes.AbstractBaseOscilloscope):
 
     def __init__(self, ip="10.25.21.168"):
         """
@@ -9,5 +9,5 @@ class Agilent33220A(osci.AbstractBaseOscilloscope):
         Args:
             ip: The port where this instrument is listening on
         """
-        osci.AbstractBaseOscilloscope.__init__(self, ip=ip)
+        oscilloscopes.AbstractBaseOscilloscope.__init__(self, ip=ip)
         

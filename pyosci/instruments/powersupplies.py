@@ -7,8 +7,8 @@ import time
 from plx_gpib_ethernet import PrologixGPIBEthernet
 
 from . import oscilloscopes as osci
-from . import commands as cmd
-from . import logging
+from ..scpi import commands as cmd
+from .. import loggers
 
 bar_available = False
 
@@ -44,7 +44,7 @@ class KeysightE3631APowerSupply(object):
         gpib = PrologixGPIBEthernet(ip)
         gpib.connect()
         gpib.select(gpib_address)
-        self.logger = logging.get_logger(loglevel)
+        self.logger = loggers.get_logger(loglevel)
         self.instrument = gpib
         self.P6 = KCmd.P6
         self.P25 = KCmd.P25

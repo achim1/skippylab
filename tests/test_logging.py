@@ -1,10 +1,10 @@
 import pytest
-import pyosci.logging as log
+import pyosci.loggers as log
 
 
 @pytest.fixture(params=[(10, 0),\
-                        18(20, 0),\
-                        19(30, 0)])
+                        (20, 0),\
+                        (30, 0)])
 
 def prepare_test_data_for_logger(request):
     return request.param

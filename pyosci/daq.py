@@ -2,13 +2,13 @@
 Use the scope as a DAQ
 
 """
-from . import osci
+from .instruments import oscilloscopes
 from . import tools
-from . import commands as cmd
+from .scpi import commands as cmd
 from . import plotting
-from . import logging as daqlog
+from .loggers import get_logger
 
-logger = daqlog.get_logger(20)
+logger = get_logger(20)
 
 import time
 import re

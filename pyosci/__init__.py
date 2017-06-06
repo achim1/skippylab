@@ -9,11 +9,13 @@ import appdirs as _appdirs
 import shutil as _shutil
 import os as _os
 
+from . import instruments, scpi, plotting, tools
+
+
 from matplotlib import get_configdir as mpl_configdir
 
-from . import logging
-##from . import instruments
-#from . import scpi
+from . import loggers
+
 
 _appdir = _os.path.split(__file__)[0]
 _appname = _os.path.split(_appdir)[1]
@@ -22,7 +24,7 @@ _appname = _os.path.split(_appdir)[1]
 STYLE_BASEFILE_STD = _os.path.join(_appdir,"pyoscipresent.mplstyle")
 STYLE_BASEFILE_PRS = _os.path.join(_appdir,"pyoscidefault.mplstyle")
 
-logger = logging.get_logger(20)
+logger = loggers.get_logger(20)
 
 def get_configdir():
     """

@@ -1,9 +1,29 @@
 from setuptools import setup
 
-from pyosci import __version__
+import os.path, re, sys
+
+
+def get_version(package):
+    """
+    Return package version as listed in `__version__` in `init.py`.
+    """
+    with open(os.path.join(package, '__init__.py'), 'rb') as init_py:
+        src = init_py.read().decode('utf-8')
+        return re.search("__version__ = ['\"]([^'\"]+)['\"]", src).group(1)
+
+version = get_version('pyosci')
+
+tests_require = [
+    'pytest>=3.0.5',
+    'pytest-cov',
+    'pytest-runner',
+]
+
+needs_pytest = set(('pytest', 'test', 'ptr')).intersection(sys.argv)
+setup_requires = ['pytest-runner'] if needs_pytest else []
 
 setup(name='pyosci',
-      version=__version__,
+      version=version,
       description='Readout a TektronixDPO4104B oscilloscope',
       long_description='Use the oscilloscope for readout of waveforms bascially as a daq. Provides an easy to extend API to inlcude more functionality',
       author='Achim Stoessl',
@@ -15,6 +35,8 @@ setup(name='pyosci',
                         'appdirs>=1.4.0',
                         'pyprind>=2.9.6',
                         'six>=1.1.0'],
+      setup_requires=setup_requires,
+      tests_require=tests_require,
       license="GPL",
       platforms=["Ubuntu 14.04","Ubuntu 16.04"],
       classifiers=[

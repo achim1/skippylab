@@ -7,10 +7,11 @@ import time
 import numpy as np
 import pylab as p
 import vxi11
+import re
 from six import with_metaclass
 
 from .. scpi import commands as cmd
-from .. import logging
+from .. import loggers
 from .. import plotting
 from .. import tools
 
@@ -80,7 +81,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         self.wf_buff_header = None # store a waveform header in case they are all the same
         self.instrument = vxi11.Instrument(ip)
         self.active_channel = None
-        self.logger = logging.get_logger(loglevel)
+        self.logger = loggers.get_logger(loglevel)
 
     def reopen_socket(self):
         """
@@ -279,6 +280,31 @@ class Waveform(object):
 #
 #
 #    """
+class UnknownOscilloscope(AbstractBaseOscilloscope):
+    """
+    Use for testing and debugging
+
+    """
+    def select_channel(self, channel):
+        raise NotImplementedError("Not implemented!")
+
+    def samplingrate(self):
+        raise NotImplementedError("Not Implemented!")
+
+    def acquire_waveform(self):
+        raise NotImplementedError("Not Implemented!")
+
+
+def get_header(self):
+    if not self._header:
+        response = self.send(TCmd.WF)
+        self._header = self.decode_header(response)
+
+    return self._header
+
+
+def set_header(self, header):
+    self._header = header
 
 
 class TektronixDPO4104B(AbstractBaseOscilloscope):
@@ -300,13 +326,16 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     histstart = setget(cmd.HISTSTART)
     histend = setget(cmd.HISTEND)
 
+
+
     def __init__(self, ip, loglevel=20):
         AbstractBaseOscilloscope.__init__(self, ip, loglevel=loglevel)
         self.active_channel = TCmd.CH1
-        self._header_buff = False
-        self._wf_buff = np.zeros(len(self.waveform_bins))
+        #self._header_buff = False
+        #self._wf_buff = np.zeros(len(self.waveform_bins))
         self._data_start_stop_buffer = (None, None)
-
+        #self._header = {}
+        header = property(get_header, set_header)
         # FIXME: future extension
         self._is_running = False
         self._acquisition_single = False
@@ -315,8 +344,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self.waveform_enc = cmd.ASCII
 
         # fill the buffer
-        self.fill_header_buffer()
-        self.fill_buffer()
+        #self.fill_header_buffer()
+        #self.fill_buffer()
 
     def fill_header_buffer(self):
         self._header_buff = self.wf_header()
@@ -336,6 +365,98 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             None
         """
         self.acquire = "ON"
+
+    @staticmethod
+    def decode_header(response, return_last_index=False, absolute_timing=False):
+        """
+        Parse a response searching for waveform header data
+
+        Args:
+            head (str): hopefully the result of some WAVFrm or similar command
+
+        Keyword Args:
+            return_last_index (bool): if True, also the last index of the header in
+                                      the string will be returned
+            absolute_timing (bool) : try to infer the absolute timeing (whatever that means)
+                                     # FIXME!
+        Returns:
+            dict/tuple
+        """
+        # create patterns
+        pattern = '(?P<byteno>\d*);(?P<bitno>\d*);(?P<enc>\D*);(?P<bnform>\D*);(?P<bitor>\D*);'
+        pattern += '(?P<wfid>[a-zA-Z0-9,./"\s]*);(?P<npoints>\d*);(?P<pointfmt>\D*);'
+        pattern += '(?P<xunit>[A-Za-z0-9\"]*);(?P<xincr>[0-9\.E\-\+]*);(?P<xzero>[0-9\.E\-\+]*);(?P<ptoff>\d*);'
+        pattern += '(?P<yunit>[A-Za-z0-9\"]*);(?P<ymult>[0-9\.E\-\+]*);(?P<yoff>[0-9\.E\-\+]*);'
+        pattern += '(?P<yzero>[0-9\.E\-\+]*);'
+
+        wfid_subpat = '"(?P<channel>[A-Za-z0-9]*),\s*(?P<cpling>[A-Za-z0-9\s]*),\s*'
+        wfid_subpat += '(?P<vdiv>[A-Za-z0-9./]*),\s*(?P<hdiv>[A-Za-z0-9./]*),\s*'
+        wfid_subpat += '(?P<points>[A-Za-z0-9./\s]*),\s*(?P<sampmode>[A-Za-z0-9./\s]*);?"'
+
+        subregex = re.compile(wfid_subpat)
+        regex = re.compile(pattern)
+
+        parsed = regex.search(response)
+        header = {}
+        if parsed is None:
+            return header
+
+        header.update(parsed.groupdict())
+        wfid_parsed = subregex.search(header["wfid"])
+        if wfid_parsed is not None:
+            header.pop("wfid")
+            header.update(wfid_parsed.groupdict())
+
+        # now convert the fields
+        for k in header:
+            try:
+                header[k] = float(header[k])
+            except ValueError:
+                #shouganei ne
+                pass
+
+        # get rid of extra " in units
+        header["xunit"] = header["xunit"].replace('"', '')
+        header["yunit"] = header["yunit"].replace('"', '')
+
+        # also some are ints
+        header["npoints"] = int(header["npoints"])
+
+        if absolute_timing:
+            xs = np.ones(header["npoints"])*header["xzero"]
+        else:
+            # relative timing?
+            xs = np.zeros(int(header["npoints"]))
+
+        # FIXME: There must be a better way
+        for i in range(int(header["npoints"])):
+            xs[i] += i*header["xincr"]
+
+        header["xs"] = xs
+
+        last_index = 0
+        if return_last_index:
+            __, last_index = parsed.span(parsed.lastgroup)
+            return header, last_index
+        return header
+
+    @staticmethod
+    def decode_waveform(response, binary=False):
+        """
+        Search the response for waveform data
+
+        Args:
+            response (str): Hopefully the result of a CURVE command or similar
+
+        Keyword Args:
+            binary (bool): Is the data in binary?
+
+        Returns:
+            np.ndarray
+        """
+        response = response.replace(";", "") # clean trailing ;
+        data = np.fromstring(response, sep=",")
+        return data
 
     @staticmethod
     def _parse_wf_header(header):
@@ -362,6 +483,14 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
                 f = float(parsed[k])
                 parsed[k] = f
             except ValueError:
+
+                try:
+                    parsed[k] = parsed[k].split()[1]
+                    parsed[k] = float(parsed[k])
+
+                except ValueError:
+                    continue
+
                 continue
 
             # get rid of extra " in units
@@ -400,6 +529,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         """
         self.source = self.active_channel
 
+
+
     @property
     def samplingrate(self):
         """
@@ -408,7 +539,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         Returns:
             float
         """
-        head = self.wf_header()
+        #head = self.wf_header()
+        head = self.header
         self.logger.debug("Got samplingrate of {}".format(1./head["xincr"]))
         return 1./head["xincr"]
 
@@ -440,7 +572,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self.data_stop = BIG_NUMBER # temporarily set this to a big bogus number
                                     # this will result in the correct value for
                                     # "npoints" later
-        head = self.wf_header()
+        #head = self.wf_header()
+        head = self.header
         self.set_acquisition_window(0, head["npoints"])
 
     @property
@@ -451,7 +584,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         Returns:
             float
         """
-        head = self.wf_header()
+        #head = self.wf_header()
+        head = self.header
         return float(head["xincr"])
 
     @property
@@ -462,7 +596,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         Returns:
             np.ndarray
         """
-        head = self.wf_header()
+        #head = self.wf_header()
+        head = self.header
         bin_zero = self.data_start
         bins = np.linspace(int(self.data_start), int(self.data_stop), int(head["npoints"]))
         return bins
@@ -475,7 +610,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         Returns:
             np.ndarray
         """
-        head = self.wf_header()
+        #head = self.wf_header()
+        head = self.header
         return head["xs"]
 
     @property
@@ -508,60 +644,78 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         bincenters = r_binedges + (r_binedges - l_binedges)/2.
         return bincenters, bincontent 
 
-    def wf_header(self, absolute_timing=False):
-        """
-        Get some meta information about the *next incoming wavefrm*
+    # def wf_header(self, absolute_timing=False):
+    #     """
+    #     Get some meta information about the *next incoming wavefrm*
+    #
+    #     Keyword Args:
+    #         absolute_timing (bool): header["xs"] starts with header["xzero"], 0 otherwiese
+    #
+    #     Returns:
+    #         dict
+    #     """
+    #     header = self._send(TCmd.WF_HEADER)
+    #     header = self._parse_wf_header(header)
+    #     self.wf_buff_header = header
+    #     #header["xs"] = np.ones(len(header["npoints"]))*header["xzero"]
+    #     if absolute_timing:
+    #         xs = np.ones(header["npoints"])*header["xzero"]
+    #     else:
+    #         # relative timing?
+    #         xs = np.zeros(int(header["npoints"]))
+    #     # FIXME: There must be a better way
+    #     for i in range(int(header["npoints"])):
+    #         xs[i] += i*header["xincr"]
+    #
+    #     header["xs"] = xs
+    #     return header
 
-        Keyword Args:
-            absolute_timing (bool): header["xs"] starts with header["xzero"], 0 otherwiese
-
-        Returns:
-            dict
-        """
-        header = self._send(TCmd.WF_HEADER)
-        header = self._parse_wf_header(header)
-        self.wf_buff_header = header
-        #header["xs"] = np.ones(len(header["npoints"]))*header["xzero"]
-        if absolute_timing:
-            xs = np.ones(header["npoints"])*header["xzero"]
-        else:
-            # relative timing?
-            xs = np.zeros(int(header["npoints"]))
-        # FIXME: There must be a better way
-        for i in range(int(header["npoints"])):
-            xs[i] += i*header["xincr"]
-
-        header["xs"] = xs
-        return header
-
-    def acquire_waveform(self, buff_header=False):
+    def acquire_waveform(self, header=None):
         """
         Get the waveform data
 
         Keyword Args:
-            buff_header: buffer the header (do NOT query the header every time)
-                         WARNING: This is only correct if there are no changes
-                                  to the way the acquisition is made
+            header (dict): if header is None, a new header will be acquired
 
         Returns:
             np.ndarray
         """
-
-        waveform = self._send(cmd.CURVE)
-        waveform = np.array([float(k) for k in waveform.split(",")])
-        if buff_header:
-            header = self._header_buff
-            assert header is not None, "Nothing in header buffer, call fill_header_buffer"
+        if header is None:
+            wf_response = self._send(TCmd.WF)
+            header, last_index = self.decode_header(wf_response, return_last_index=True)
+            wf_data = wf_response[last_index:]
         else:
-            header = self.wf_header()
+            wf_response = self._send(TCmd.WF_NOHEAD)
+            wf_data = wf_response
 
+        # explicitely save the last header
+        self.header = header
+        waveform = self.decode_waveform(wf_data)
         # from the docs
         # Value in YUNit units = ((curve_in_dl - YOFf) * YMUlt) + YZEro
         waveform = (waveform - (np.ones(len(waveform))*header["yoff"]))\
-                   *(np.ones(len(waveform))*header["ymult"])\
-                   +(np.ones(len(waveform))*header["yzero"])
-
+                    *(np.ones(len(waveform))*header["ymult"])\
+                    +(np.ones(len(waveform))*header["yzero"])
         return waveform
+
+        # waveform = self._send(TCmd.WF)
+        # header = self.decode_header(waveform)
+        #
+        # waveform = self._send(cmd.CURVE)
+        # waveform = np.array([float(k) for k in waveform.split(",")])
+        # if buff_header:
+        #     header = self._header_buff
+        #     assert header is not None, "Nothing in header buffer, call fill_header_buffer"
+        # else:
+        #     header = self.wf_header()
+        #
+        # # from the docs
+        # # Value in YUNit units = ((curve_in_dl - YOFf) * YMUlt) + YZEro
+        # waveform = (waveform - (np.ones(len(waveform))*header["yoff"]))\
+        #            *(np.ones(len(waveform))*header["ymult"])\
+        #            +(np.ones(len(waveform))*header["yzero"])
+        #
+        # return waveform
 
     def set_acquisition_window(self, start, stop):
         """
@@ -576,7 +730,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         """
         self.data_start = start
         self.data_stop = stop
-        self._wf_buff = np.zeros(len(self.waveform_bins))
+        #self._wf_buff = np.zeros(len(self.waveform_bins))
         self._data_start_stop_buffer = (start, stop)
         self.logger.info("Set acquisition window to {} - {}".format(self.data_start, self.data_stop))
 
@@ -650,18 +804,23 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         else:
             self.trigger_continuous()
         wf_buff = 0
+        # get the first waveform
+        wf_buff = self.acquire_waveform()
+        n -= 1
         while acquired < n:
             try:
                 if single_acquisition:
                     self.acquire = "ON"
-                wf = self.acquire_waveform(buff_header=True)
+                wf = self.acquire_waveform(header=self.header)
+
+                # flatline test
                 if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
-                    continue # flatline test
+                    continue
                 if (wf - wf_buff).sum() == 0:
                     continue # test if scope just returned the
                              # same waveform again
                 if return_only_charge:
-                     wf = tools.integrate_wf(header, wf)
+                     wf = tools.integrate_wf(self.header, wf)
                 wf_buff = wf
                 wforms.append(wf)
                 acquired += 1
@@ -689,7 +848,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
 
         """
 
-        wf = self.make_n_acquisitions(n, single_acquisition=False)
+        wf = self.make_n_acquisitions(n, single_acquisition=True)
         xs = self.waveform_times
         len_wf = [len(w) for w in wf]
         wf = [w for w in wf if len(w) == min(len_wf)]
@@ -709,7 +868,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         """
 
         wf = self.make_n_acquisitions(n, single_acquisition=False)
-        head = self.wf_header()
+        #head = self.wf_header()
+        head = self.header
         for i in range(len(wf)):
             try:
                 plotting.plot_waveform(head, wf[i])
@@ -755,6 +915,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         if use_buffered_acq_window:
             self.set_acquisition_window_from_internal_buffer()
         #while True:
+        #if buff_header:
+        #    header = self.
         wf = self.acquire_waveform(buff_header=buff_header)
 
             #if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:

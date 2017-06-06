@@ -208,9 +208,11 @@ class TektronixDPO4104BCommands(object):
     """
     Namespace for the commands for the TektronixDP04104B
     """
-    WF_HEADER = concat(WF_BYTQ, WF_ENCQ, WF_NPOINTSQ, WF_XZEROQ, WF_XINCRQ, \
-                       WF_YZEROQ, WF_YOFFQ, WF_YMULTQ, \
+    WF_HEADER = concat(WF_BYTQ, WF_ENCQ, WF_NPOINTSQ, WF_XZEROQ, WF_XINCRQ,\
+                       WF_YZEROQ, WF_YOFFQ, WF_YMULTQ,\
                        WF_XUNITQ, WF_YUNITQ)
+    WF = query("WAVFrm")
+    WF_NOHEAD = query("CURVE")
     CH1 = "CH1"
     CH2 = "CH2"
     CH3 = "CH3"
@@ -220,9 +222,9 @@ class TektronixDPO4104BCommands(object):
     ONE = "1"
     ZERO = "0"
     TRIGGER_FREQUENCY_ENABLED = "DISplay:TRIGFrequency"
-    TRIGGER_FREQUENCYQ = "TRIGger:FREQuency?"
+    TRIGGER_FREQUENCYQ = query("TRIGger:FREQuency")
     ACQUISITON_MODE = "ACQuire:STOPAfter"
-    N_ACQUISITIONS = "ACQuire:NUMACq?"
+    N_ACQUISITIONS = query("ACQuire:NUMACq")
 
 class RhodeSchwarzRTO1044Commands(object):
     """

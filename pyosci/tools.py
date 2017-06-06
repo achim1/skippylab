@@ -4,6 +4,8 @@ Convenient operations
 """
 
 import numpy as np
+import os
+import os.path
 import scipy.integrate as integrate
 from copy import deepcopy as copy
 
@@ -46,7 +48,7 @@ def integrate_wf(waveform, xs, xstep,\
         float
     """
 
-    integral = method(waveform, xs, xstep)
+    integral = method(waveform, xs, dx=xstep)
     return integral/impedance
 
 
