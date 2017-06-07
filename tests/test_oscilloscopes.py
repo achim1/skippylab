@@ -4,7 +4,7 @@ import pytest
 # As port 111 is privileged, unfortunatley this requires root privileges
 #
 
-from pyosci.instruments.oscilloscopes import UnknownOscilloscope
+from skippylab.instruments.oscilloscopes import UnknownOscilloscope
 
 def test_UnknownOscilloscope():
     scope = UnknownOscilloscope("127.0.0.1")

@@ -1,5 +1,5 @@
 import pytest
-import pyosci.loggers as log
+import skippylab.loggers as log
 
 
 @pytest.fixture(params=[(10, 0),\

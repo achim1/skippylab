@@ -1,6 +1,6 @@
 import socket, time
 
-import pyosci.scpi.commands as cmd
+import skippylab.scpi.commands as cmd
 
 import xdrlib
 import vxi11.rpc as rpc

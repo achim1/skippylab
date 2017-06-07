@@ -11,7 +11,7 @@ def get_version(package):
         src = init_py.read().decode('utf-8')
         return re.search("__version__ = ['\"]([^'\"]+)['\"]", src).group(1)
 
-version = get_version('pyosci')
+version = get_version('skippylab')
 
 tests_require = [
     'pytest>=3.0.5',
@@ -22,9 +22,9 @@ tests_require = [
 needs_pytest = set(('pytest', 'test', 'ptr')).intersection(sys.argv)
 setup_requires = ['pytest-runner'] if needs_pytest else []
 
-setup(name='pyosci',
+setup(name='skippylab',
       version=version,
-      description='Readout a TektronixDPO4104B oscilloscope',
+      description='Readout instuments communication via vxi11 and SCPI like the TektronixDPO4104B oscilloscope',
       long_description='Use the oscilloscope for readout of waveforms bascially as a daq. Provides an easy to extend API to inlcude more functionality',
       author='Achim Stoessl',
       author_email="achim.stoessl@gmail.com",
@@ -49,8 +49,8 @@ setup(name='pyosci',
               ],
       keywords=["oscilloscope", "daq",\
                 "TektronixDPO4104B", "Tektronix",\
-                "readout", "physics", "engineering", "SCPI", "VISA"],
-      packages=['pyosci', 'pyosci.instruments', 'pyosci.scpi'],
+                "readout", "physics", "engineering", "SCPI", "VISA", "vxi11"],
+      packages=['skippylab', 'skippylab.instruments', 'skippylab.scpi'],
       #scripts=[],
-      package_data={'pyosci': ['pyoscidefault.mplstyle','pyoscipresent.mplstyle']}
+      package_data={'skippylab': ['pyoscidefault.mplstyle','pyoscipresent.mplstyle']}
       )

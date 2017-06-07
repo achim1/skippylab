@@ -11,11 +11,12 @@ import os as _os
 
 from . import instruments, scpi, plotting, tools
 
-
 from matplotlib import get_configdir as mpl_configdir
 
 from . import loggers
 
+# easy access
+TektronixDPO4104B = instruments.TektronixDPO4104B
 
 _appdir = _os.path.split(__file__)[0]
 _appname = _os.path.split(_appdir)[1]
