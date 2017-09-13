@@ -1,7 +1,13 @@
 [![Code Issues](https://www.quantifiedcode.com/api/v1/project/bd0c238d3dd3406d8dc2d4a456a862e1/badge.svg)](https://www.quantifiedcode.com/app/project/bd0c238d3dd3406d8dc2d4a456a862e1)
 
-pyosci - manage data acquisition with an vxi11 capable oscilloscope
+SKippylab - work with SCPI instruments
 ========================================================================
+
+
+Rationale
+--------------
+
+
 
 Use a vxi11 capable scope (most of the new ones with a LAN port and visa compatibility support that protocoll) as a data acquisition system.
 The package provides a oscilloscope independent DAQ which can be used for scripting the data taking.
@@ -14,7 +20,7 @@ For the software to work, the machine this software is installed on needs to be 
 
 
 
-Supported oscilloscopes so far
+Supported oscilloscopes 
 ----------------------------------
 
 * TektronixDPO4104B

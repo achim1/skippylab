@@ -69,6 +69,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
     MAXTRIALS = 5
     CONTINOUS_RUN = cmd.RUN_CONTINOUS
     ACQUIRE_ONE = cmd.RUN_SINGLE
+    string_encoding = cmd.ENCODING_ISO
 
     def __init__(self, ip="169.254.68.19", loglevel=20):
         """
@@ -110,10 +111,10 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
 
         self.logger.debug("Sending {}".format(command))
         try:
-            response = self.instrument.ask(command)
+            response = self.instrument.ask(command, encoding=self.string_encoding)
         except Exception as e:
             self.reopen_socket()
-            response = self.instrument.ask(command)
+            response = self.instrument.ask(command, encoding=self.string_encoding)
             self.connect_trials += 1
 
         return response
@@ -129,7 +130,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
             None
         """
         self.logger.debug("Sending {}".format(command))
-        self.instrument.write(command)
+        self.instrument.write(command, encoding=self.string_encoding)
 
     def ping(self):
         """
@@ -224,58 +225,63 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         self.instrument.close()
 
 
-class Waveform(object):
+class Waveform(with_metaclass(abc.ABCMeta, object)):
     """
     A non-oscilloscope dependent representation of a measured
     waveform
     """
-    header = dict()
 
-    def __init__(self, header, curvedata):
+    def __init__(self, header, raw_waveform):
         """
         Args:
             header (dict): Metadata, like xs, units, etc.
-            curvedata (np.ndarray): The voltage data
+            raw_waveform (np.ndarray/list): The voltage data for one or more wavefomrs
         """
 
         self.header = header
-        self.data = curvedata
+        if not isinstance(raw_waveform, list):
+            raw_waveform = [raw_waveform]
 
-    @property
-    def ns(self):
-        """
-        Return the signal recording time with ns precision
+        self.data = raw_waveform
 
-        Returns:
-            np.ndarray
-        """
-        return
+    #@abc.abstractmethod
+    #def convert(self):
+    #    pass
 
-    @property
-    def mV(self):
-        """
-        Return the recorded voltages per bin
-
-        Returns:
-            np.ndarray
-        """
-        return
-
-    @property
-    def bins(self):
-        """
-        Return digitizer time bin numbers (arbitrary scale)
-
-        Returns:
-            np.ndarray
-        """
-        return
-
-    @property
-    def header(self):
+    @abc.abstractmethod
+    def time_bins(self):
         pass
 
+    @abc.abstractmethod
+    def volts(self):
+        pass
 
+    @abc.abstractmethod
+    def save(self):
+        pass
+
+    @abc.abstractmethod
+    def load(self):
+        pass
+    
+# class TektronixWaveform(Waveform):
+#     """
+#     A bundle of waveforms
+#     """
+#
+#     def _convert_volts(self, waveform):
+#         voltages = ((waveform - (np.ones(len(waveform)) * self.header["yoff"])) \
+#                     * (np.ones(len(waveform)) * self.header["ymult"])) \
+#                    + (np.ones(len(waveform)) * self.header["yzero"])
+#         return voltages
+#
+#     def volts(self):
+#         converted = []
+#         for waveform in self.data:
+#             converted.append(self._convert_volts(waveform))
+#
+#         return converted
+#
 class UnknownOscilloscope(AbstractBaseOscilloscope):
     """
     Use for testing and debugging
@@ -312,6 +318,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     source = setget(cmd.SOURCE)
     data_start = setget(cmd.DATA_START)
     data_stop = setget(cmd.DATA_STOP)
+    data_width = setget(TCmd.WF_BYTEWIDTH)
     waveform_enc = setget(cmd.WF_ENC)
     acquire = setget(cmd.RUN)
     acquire_mode = setget(TCmd.ACQUISITON_MODE)
@@ -321,6 +328,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     histbox = setget(cmd.HISTBOX)
     histstart = setget(cmd.HISTSTART)
     histend = setget(cmd.HISTEND)
+
 
     # FIXME make it a property
     binary_formats = {"RI": "!b"} # transform the binary format to something
@@ -333,7 +341,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         self.active_channel = TCmd.CH1
         self._data_start_stop_buffer = (None, None)
         self.header = property(get_header, set_header)
-
+        self.data_width = 1
         # FIXME: future extension
         self._is_running = False
         self._acquisition_single = False
@@ -460,8 +468,8 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         data = np.fromstring(response, sep=",")
         return data
 
-    @staticmethod
-    def decode_binary_waveform(response, header):
+    #@staticmethod
+    def decode_binary_waveform(self, response, header):
         """
         Decaode a waveform in binary format. To do so, the header is
         required to know about the exact format.
@@ -493,7 +501,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         else:
             raise ValueError("Unsupported binary format! Please check header!")
 
-        buffer = struct.iter_unpack(bin_format, bytes(response[last_index:].encode("utf-8")))
+        buffer = struct.iter_unpack(bin_format, bytes(response[last_index:].encode(self.string_encoding)))
         data = np.array([i[0] for i in buffer])
         return data
 
@@ -574,7 +582,6 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         Returns:
             float
         """
-        head = self.header
         return float(self.header["xincr"])
 
     @property
@@ -652,12 +659,19 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             waveform = self.decode_ascii_waveform(wf_data)
         else:
             waveform = self.decode_binary_waveform(wf_data, header)
+        waveform = self.convert_waveform(header, waveform)
+        return waveform
+
+    @staticmethod
+    def convert_waveform(header, waveform):
         # from the docs
         # Value in YUNit units = ((curve_in_dl - YOFf) * YMUlt) + YZEro
         waveform = ((waveform - (np.ones(len(waveform))*header["yoff"]))\
                     *(np.ones(len(waveform))*header["ymult"]))\
                     +(np.ones(len(waveform))*header["yzero"])
         return waveform
+
+
 
     def set_acquisition_window(self, start, stop):
         """

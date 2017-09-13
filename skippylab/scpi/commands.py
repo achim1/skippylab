@@ -3,6 +3,9 @@ A namespace for oscilloscope string commands. The commands are send as ASCII
 to the scope using a socket connection
 """
 
+ENCODING_UTF8 = "utf-8"
+ENCODING_ISO = "iso-8859-1"
+
 query = lambda cmd : cmd  + "?"
 
 def add_arg(cmd, arg):
@@ -221,6 +224,7 @@ class TektronixDPO4104BCommands(object):
     OFF = "OFF"
     ONE = "1"
     ZERO = "0"
+    WF_BYTEWIDTH = "DATA:WIDTH"
     TRIGGER_FREQUENCY_ENABLED = "DISplay:TRIGFrequency"
     TRIGGER_FREQUENCYQ = query("TRIGger:FREQuency")
     ACQUISITON_MODE = "ACQuire:STOPAfter"
