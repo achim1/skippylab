@@ -67,12 +67,16 @@ def save_waveform(header, waveform, filename):
     return None
 
 
-def load_waveform(filename):
+def load_waveform(filename, converter=lambda header, data:data):
     """
     load a waveform from a file
 
     Args:
         filenaame (str): An existing filename
+
+    Keyword Args:
+        converter (func): If the data is saved in digitizer levels, use
+                          the converter function to convert to Volts
 
     Returns:
         tuple (dict, np.ndarray)
@@ -83,4 +87,11 @@ def load_waveform(filename):
         filename += ".npy"
 
     head, wf = np.load(filename)
+    try:
+        wf = converter(head, wf)
+    except ValueError: #wf is probably a list of waveforms
+        converted = []
+        for i in wf:
+            converted.append(converter(head, i))
+        wf = converted
     return head, wf

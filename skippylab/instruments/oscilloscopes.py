@@ -410,7 +410,7 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         # now convert the fields
         for k in header:
             try:
-                header[k] = float(header[k])
+                header[k] = np.float32(header[k])
             except ValueError:
                 #shouganei ne
                 pass
@@ -424,13 +424,13 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         header["byteno"] = int(header["byteno"])
 
         if absolute_timing:
-            xs = np.ones(header["npoints"])*header["xzero"]
+            xs = np.ones(header["npoints"], dtype=np.float32)*header["xzero"]
         else:
             # relative timing?
-            xs = np.zeros(int(header["npoints"]))
+            xs = np.zeros(header["npoints"], dtype=np.float32)
 
         # FIXME: There must be a better way
-        for i in range(int(header["npoints"])):
+        for i in range(header["npoints"]):
             xs[i] += i*header["xincr"]
 
         header["xs"] = xs
@@ -502,7 +502,10 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             raise ValueError("Unsupported binary format! Please check header!")
 
         buffer = struct.iter_unpack(bin_format, bytes(response[last_index:].encode(self.string_encoding)))
-        data = np.array([i[0] for i in buffer])
+        dtype = np.int8
+        if header["byteno"] == 2:
+            dtype = np.int16
+        data = np.array([i[0] for i in buffer], dtype=dtype)
         return data
 
     def select_channel(self, channel):
@@ -636,13 +639,15 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         bincenters = r_binedges + (r_binedges - l_binedges)/2.
         return bincenters, bincontent 
 
-    def acquire_waveform(self, header=None):
+    def acquire_waveform(self, header=None, return_digitizer_levels=False):
         """
         Get the waveform data
 
         Keyword Args:
             header (dict): if header is None, a new header will be acquired
-
+            return_digitizer_levels (bool): return the waveform data in digitizer levels, not volts.
+                                        Saves space for storage, since int8 can be used for 1-bit representation.
+                                        ..and there is no float8 for obvious reasons.
         Returns:
             np.ndarray
         """
@@ -659,6 +664,9 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             waveform = self.decode_ascii_waveform(wf_data)
         else:
             waveform = self.decode_binary_waveform(wf_data, header)
+        if return_digitizer_levels:
+            return waveform
+
         waveform = self.convert_waveform(header, waveform)
         return waveform
 
@@ -669,9 +677,10 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
         waveform = ((waveform - (np.ones(len(waveform))*header["yoff"]))\
                     *(np.ones(len(waveform))*header["ymult"]))\
                     +(np.ones(len(waveform))*header["yzero"])
+
+        waveform = np.array(waveform, dtype=np.float32)
+        print (waveform)
         return waveform
-
-
 
     def set_acquisition_window(self, start, stop):
         """
@@ -731,7 +740,9 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
 
     def make_n_acquisitions(self, n,\
                             trials=20, return_only_charge=False,\
-                            single_acquisition=True):
+                            single_acquisition=True,\
+                            return_digitizer_levels=False
+                            ):
         """
         Acquire n waveforms
 
@@ -742,6 +753,9 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             trials (int): Set breaking condition when to abort acquisition
             return_only_charge (bool): don't get the wf, but only integrated charge instead
             single_acquisition (bool): use the scopes single acquisition mode
+            return_digitizer_levels (bool): return the waveform data in digitizer levels, not volts.
+                                        Saves space for storage, since int8 can be used for 1-bit representation.
+                                        ..and there is no float8 for obvious reasons.
 
         Returns:
             list: [wf_1,wf_2,...]
@@ -758,13 +772,13 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
             self.trigger_continuous()
         wf_buff = 0
         # get the first waveform
-        wf_buff = self.acquire_waveform()
+        wf_buff = self.acquire_waveform(return_digitizer_levels=return_digitizer_levels)
         n -= 1
         while acquired < n:
             try:
                 if single_acquisition:
                     self.acquire = "ON"
-                wf = self.acquire_waveform(header=self.header)
+                wf = self.acquire_waveform(header=self.header, return_digitizer_levels=return_digitizer_levels)
 
                 # flatline test
                 if (wf[0]*np.ones(len(wf)) - wf).sum() == 0:
@@ -773,7 +787,9 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
                     continue # test if scope just returned the
                              # same waveform again
                 if return_only_charge:
-                     wf = tools.integrate_wf(self.header, wf)
+                    if return_digitizer_levels:
+                        raise ValueError("Can not be done for digitizer levels! Need to convert to volts!")
+                    wf = tools.integrate_wf(self.header, wf)
                 wf_buff = wf
                 wforms.append(wf)
                 acquired += 1
