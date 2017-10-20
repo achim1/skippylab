@@ -34,7 +34,8 @@ setup(name='skippylab',
                         'matplotlib>=1.5.0',
                         'appdirs>=1.4.0',
                         'pyprind>=2.9.6',
-                        'six>=1.1.0'],
+                        'six>=1.1.0',
+                        "python-vxi11>=0.9.0"],
       setup_requires=setup_requires,
       tests_require=tests_require,
       license="GPL",
@@ -52,5 +53,5 @@ setup(name='skippylab',
                 "readout", "physics", "engineering", "SCPI", "VISA", "vxi11"],
       packages=['skippylab', 'skippylab.instruments', 'skippylab.scpi'],
       #scripts=[],
-      package_data={'skippylab': ['pyoscidefault.mplstyle','pyoscipresent.mplstyle']}
+      #package_data={'skippylab': ['pyoscidefault.mplstyle','pyoscipresent.mplstyle']}
       )

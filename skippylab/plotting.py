@@ -8,7 +8,7 @@ import seaborn.apionly as sb
 
 from copy import copy
 
-p.style.use("pyoscidefault")
+#p.style.use("pyoscidefault")
 
 
 def plot_waveform(wf_header, wf_data,\

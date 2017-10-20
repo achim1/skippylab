@@ -56,4 +56,4 @@ def install_styles(style_default=STYLE_BASEFILE_STD, \
                                     Check source code location".format(f)
         _shutil.copy(f,mpl_styledir)
 
-install_styles()
+#install_styles()

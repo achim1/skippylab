@@ -40,6 +40,9 @@ Finding out the scope's IP adress (Tektronix)
 Installation 
 --------------
 
+requires the prologix-gpib-ethernet package:
+`pip install git+git://github.com/nelsond/prologix-gpib-ethernet.git`
+
 `pip3 install pyosci`
 
 
