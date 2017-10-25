@@ -1,4 +1,5 @@
-[![Code Issues](https://www.quantifiedcode.com/api/v1/project/bd0c238d3dd3406d8dc2d4a456a862e1/badge.svg)](https://www.quantifiedcode.com/app/project/bd0c238d3dd3406d8dc2d4a456a862e1)
+[![Docs](https://readthedocs.org/projects/skippylab/badge/?version=latest)](http://skippylab.readthedocs.io/en/latest/?badge=latest)
+
 
 SKippylab - work with SCPI instruments
 ========================================================================
@@ -7,77 +8,41 @@ SKippylab - work with SCPI instruments
 Rationale
 --------------
 
+The [![scpi protocoll](https://en.wikipedia.org/wiki/Standard_Commands_for_Programmable_Instruments)](https://en.wikipedia.org/wiki/Standard_Commands_for_Programmable_Instruments) allows for a fairly standardized way to control electronic equipment via the network.
 
+This software is intended for the use in a lab where instruments like function generators, oscilloscopes need to work together in a coherent way.
 
-Use a vxi11 capable scope (most of the new ones with a LAN port and visa compatibility support that protocoll) as a data acquisition system.
-The package provides a oscilloscope independent DAQ which can be used for scripting the data taking.
+To support instruments which do not have an ethernet interface but are equipped with a [![GPIB interface](https://en.wikipedia.org/wiki/IEEE-488)](https://en.wikipedia.org/wiki/IEEE-488), the software relies on [![Prologix GPIB controllers](http://prologix.biz/gpib-ethernet-controller.html)](http://prologix.biz/gpib-ethernet-controller.html)
 
 Requirements
 --------------
 
-For the software to work, the machine this software is installed on needs to be in the same network as the scope and its ip adress must be known.
-*tested only for python 3.5 so far*
+* python >= 3.5
 
+* prologix-gpib-ethernet from github/pip: `pip install git+git://github.com/nelsond/prologix-gpib-ethernet.git`
 
 
 Supported oscilloscopes 
 ----------------------------------
 
-* TektronixDPO4104B
+* Tektronix DPO4104B
 
-* Rhode&SchwarzRTO
-
-Finding out the scope's IP adress (Tektronix)
--------------------------------------------------
-
-* Press the utility button
-
-* Select io with the mainpurpose dial (upper left one)
-
-* LAN settings
+* Rhode&Schwarz RTO1044
 
 
-Installation 
---------------
+Supported function generators
+----------------------------------------
 
-requires the prologix-gpib-ethernet package:
-`pip install git+git://github.com/nelsond/prologix-gpib-ethernet.git`
+* Agilent 33220A (via GPIB)
 
-`pip3 install pyosci`
+
+Supported power supplies
+---------------------------------------
+
+* Keysight E3631A
 
 
 
-Using the software
----------------------
-
-An example is given by the "measurement.py" script which can be found in pyosci/resources. Acquisition of
-waveforms can be performed e.g. like this.
-
-
-```
-import pyosci.osci as osci
-import pyosci.daq as daq
-import pyosci.tools as tools
-
-# initialize with scope IP adress and port
-odaq = daq.DAQ(osci.TektronixDPO4104B("169.254.67.106"))
-
-# set an acquisiton window -20 +100 ns around peak in waveform
-odaq.set_feature_acquisition_window(20,100) 
-
-# display some waveforms on the screen
-odaq.show_waveforms()
-
-# header stores information about x and y ticks
-head = odaq.scope.get_wf_header()
-
-# take actual data (e.g. 50000 waveforms) and save it to a 
-# numpy compatible file 
-wf = odaq.make_n_acquisitions(50000)
-tools.save_waveform(head, wf, "measurement_ctrl_vlt")
-
-
-```
 
 Extending the software
 -------------------------
