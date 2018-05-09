@@ -13,7 +13,8 @@ from copy import copy
 
 def plot_waveform(wf_header, wf_data,\
                   fig=None,savename=None,\
-                  use_mv_and_ns=True,color=sb.color_palette("dark")[0]):
+                  use_mv_and_ns=True,\
+                  color=None):
     """
     Make a plot of a single acquisition
 
@@ -28,6 +29,9 @@ def plot_waveform(wf_header, wf_data,\
     Returns:
         pylab.fig
     """
+    if color is None:
+        color=sb.color_palette("dark")[0]
+
 
     if fig is None:
         fig = p.figure()
