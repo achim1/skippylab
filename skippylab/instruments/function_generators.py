@@ -4,11 +4,16 @@ Function generators
 """
 import time
 
-from plx_gpib_ethernet import PrologixGPIBEthernet
 
 from . import oscilloscopes as osci
 from ..scpi import commands as cmd
 from .. import loggers
+
+try:
+    from plx_gpib_ethernet import PrologixGPIBEthernet
+except ImportError as e:
+    logger = loggers.get_logger(10)
+    logger.warn('No plx_gpib_ethernet module installed')
 
 bar_available = False
 

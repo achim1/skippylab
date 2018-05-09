@@ -4,7 +4,6 @@ Connection to power supply unit
 """
 import time
 
-from plx_gpib_ethernet import PrologixGPIBEthernet
 
 from . import oscilloscopes as osci
 from ..scpi import commands as cmd
@@ -18,6 +17,12 @@ try:
 except ImportError:
     pass
     #logger.warning("No pyprind available")
+
+try:
+    from plx_gpib_ethernet import PrologixGPIBEthernet
+except ImportError as e:
+    logger = loggers.get_logger(10)
+    logger.warn('No plx_gpib_ethernet module installed')
 
 setget = osci.setget
 KCmd = cmd.KeysightE3631APowerSupplyCommands

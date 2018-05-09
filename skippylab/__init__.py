@@ -57,3 +57,6 @@ def install_styles(style_default=STYLE_BASEFILE_STD, \
         _shutil.copy(f,mpl_styledir)
 
 #install_styles()
+
+def _hook():
+    pass
