@@ -15,13 +15,13 @@ except Exception as e:
     print (e) 
     print ("Can not import django")
 
-def interpret_payload(payload):
+def interpret_payload(payload, instrument=RaspberryPiGPIODHT22Thermometer):
     """
     Convert the strings to types
 
     """
-    for k in RaspberryPiGPIODHT22Thermometer.TYPES:
-        payload[k] = RaspberryPiGPIODHT22Thermometer.TYPES[k](payload[k])
+    for k in instrument.TYPES:
+        payload[k] = instrument.TYPES[k](payload[k])
     return payload
 
 
@@ -59,10 +59,12 @@ if __name__ == "__main__":
         if args.save_to_db:
             payload = hjson.loads(payload)
             #payload = RaspberryPiGPIODHT22Thermometer.TYPES
-            payload = interpret_payload(payload)
+            payload = interpret_payload(payload, instrument=thermo)
             data = freezy()
             data.from_payload(payload)
+            data.topic = args.topic
             data.save()
+
         print (payload)
 
 
