@@ -3,8 +3,11 @@ Convenient plot functions
 
 """
 
+try:
+    import seaborn as sb
+except Exception as e:
+    print (e)
 import pylab as p
-import seaborn.apionly as sb
 
 from copy import copy
 

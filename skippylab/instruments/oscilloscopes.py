@@ -13,7 +13,10 @@ from six import with_metaclass
 
 from .. scpi import commands as cmd
 from .. import loggers
-from .. import plotting
+try:
+    from .. import plotting
+except Exception as e:
+    print (e)
 from .. import tools
 
 from copy import copy
