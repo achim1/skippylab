@@ -3,7 +3,7 @@ There are two main types of equipment one can have in the lab:
 
 
 """
-
+import abc
 import zmq
 
 #from ..controllers import DirectUSBController
@@ -11,6 +11,14 @@ from ..loggers import get_logger
 
 
 class AbstractBaseInstrument(object):
+
+    METADATA = { "name"     : "RaspberryPiDHT22-4Channel",
+                 "twinax"   : True,
+                 "units"    : ["C", "\%"],
+                 "channels" : 4}
+    
+
+
     def __init__(self,
                  controller=None,
                  loglevel=20,\
@@ -34,6 +42,14 @@ class AbstractBaseInstrument(object):
         self.port = publish_port
         self._socket = None
         self.axis_label = None
+
+    def identify(self):
+        """
+        Tell the user what type of instrument it is and 
+        how many channels, units etc...
+        """
+        return self.METADATA
+
 
     def _setup_port(self):
         """

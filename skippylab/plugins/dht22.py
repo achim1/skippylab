@@ -1,4 +1,8 @@
-import Adafruit_DHT
+try:
+    import Adafruit_DHT
+except ModuleNotFoundError:
+    print ("Can not use adafruit dht sensors on this machine. Try installing requirements with pip3 install Adafruit_DHT")
+
 import datetime
 import time
 

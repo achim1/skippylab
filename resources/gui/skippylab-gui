@@ -1,0 +1,74 @@
+#! /usr/bin/env python3
+
+import argparse 
+import tkinter
+
+import pylab as p
+
+from gui import InstrumentGui
+from skippylab.instruments.thermometers import RaspberryPiGPIODHT22Thermometer
+from skippylab.controllers import ZMQController
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(usage="" )
+    parser.add_argument("--npoints", help="measure n points each interval seconds",
+                        default=100000, type=int)
+    parser.add_argument("--device", help="Device string",
+                        default="/dev/ttyUSB0", type=str)
+    parser.add_argument("--interval", help="average over this measurement time",
+                        default=2, type=int)
+    parser.add_argument("--silent", help="suppress output",
+                        default=False, action="store_true")
+    parser.add_argument("--gui", help="show a graphical interface",
+                        default=False, action="store_true")
+    parser.add_argument("--maxpoints", help="Maximum amount of data points in the plot. Earlier values get removed",
+                        default=200, type=int)
+    parser.add_argument("--debug", help="Set loglevel to 10 (DEBUG)",
+                        default=False, action="store_true")
+    parser.add_argument("--port", help="Use port for publishing data",
+                        default=9876, type=int)
+    parser.add_argument("--publish", help="Open port and stream data",
+                        default=False, action="store_true")
+    parser.add_argument("--channel", help="Select channel if multichannel instrument",
+                        default=1, type=int)
+
+    args = parser.parse_args()
+
+    loglevel = 20 # log_info
+    if args.debug:
+        loglevel = 10
+
+    if args.gui:
+
+        #try:
+        #    p.style.use("goldschmidt")
+        #except:
+        #    print("Can not use style file!")
+
+        window = tkinter.Tk()
+        controller = ZMQController(ip="168.105.246.157",
+                                   topicfilter="FREEZER",
+                                   encoder=RaspberryPiGPIODHT22Thermometer.encode_payload)
+        instrument = RaspberryPiGPIODHT22Thermometer(controller=controller)
+
+        # setup an instrument and find out what it is
+#        meter = GaussMeterGU3001D(device=args.device, loglevel=loglevel, publish=args.publish, port=args.port)
+#        if not identify_instrument(meter) == "Magnetometer":
+#            meter = ThermometerTM947SD(device=args.device, loglevel=loglevel, publish=args.publish, port=args.port)
+#            meter.select_channel(args.channel)
+#            window.title("Thermometer TM947SD")
+#        else:
+#            window.title("Milli-Gauss Meter GU3001D")
+
+        app = InstrumentGui(window, instrument, interval=args.interval,\
+                            maxpoints=args.maxpoints, loglevel=loglevel)
+        window.mainloop()
+
+    else:
+        meter = GaussMeterGU3001D(device=args.device, loglevel=loglevel, port=args.port, publish=args.publish)
+        for seconds, fields in meter.measure_continously(args.npoints, args.interval):
+            if not args.silent:
+                print(seconds, fields)
+
+

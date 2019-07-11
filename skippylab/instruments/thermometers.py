@@ -2,13 +2,17 @@ import time
 import re
 import hjson
 import collections
+import datetime
 
 import matplotlib.dates as mdates
 
-
 from .abstractbaseinstrument import AbstractBaseInstrument
 from ..controllers import GPIOController
-from ..plugins.dht22 import adafruit_dht22_getter
+try:
+    from ..plugins.dht22 import adafruit_dht22_getter
+except (ImportError, ModuleNotFoundError):
+    adafruit_dht22_getter = lambda x : None
+    print ("Can not import Adafruit_DHT")
 
 class RaspberryPiGPIODHT22Thermometer(AbstractBaseInstrument):
     """
@@ -40,6 +44,21 @@ class RaspberryPiGPIODHT22Thermometer(AbstractBaseInstrument):
                                         ( "s4humi"   , "")])
 
     TOPIC  = "FREEZER"            
+    METADATA = { "name"           : "RaspberryPiDHT22-4Channel",\
+                 "twinax"         : True,\
+                 "units"          : ["C", "\%"],\
+                 "axis_labels"    : ["Temp C", "Hum \%"],\
+                 "xdata"          : "timestamp",\
+                 "plot_type"      : "date",\
+                 "channels"       : ["s1temp", "s2temp", "s3temp", "s4temp"],\
+                 "twinaxchannels" : ["s1humi", "s2humi", "s3humi", "s4humi"],\
+                 "xmaj_formatter" : mdates.DateFormatter("%m/%d/%Y"),\
+                 "xmaj_locator"   : mdates.DayLocator(),\
+                 "xmin_formatter" : mdates.DateFormatter("%H:%M"),\
+                 "xmin_locator"   : mdates.HourLocator(),
+               }
+    REVERSE_STRING_TEMPLATE = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}"
+    
 
     def __init__(self,
                  controller=GPIOController(data_getter=adafruit_dht22_getter, data_getter_kwargs={"pins" : [4,14,17,24]}),\
@@ -69,14 +88,14 @@ class RaspberryPiGPIODHT22Thermometer(AbstractBaseInstrument):
         return sorted_payload
 
     @staticmethod
-    def encode_payload(payload):
+    def encode_payload(payload, reverse_string_template=None):
         """
         Go from dict back to string
         """
         if payload is None:
             return None
         payload = hjson.loads(payload)
-        reverse_string = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(*payload.values())
+        reverse_string = reverse_string_template.format(*payload.values())
         return reverse_string
 
     def read(self):
@@ -84,6 +103,19 @@ class RaspberryPiGPIODHT22Thermometer(AbstractBaseInstrument):
         if payload is None:
             return None
         return hjson.dumps(payload)
+
+
+
+
+    def measure(self):
+        payload = self.read()
+        if payload is None:
+            self.logger.warning("Can not get data {}".format(payload))
+            return None
+        if self.publish:
+            self._socket.send((self.TOPIC + "\t" + payload).encode())
+        return payload
+
 
     def measure_continuously(self, measurement_time=10, interval=5):
         """
@@ -113,9 +145,9 @@ class RaspberryPiGPIODHT22ThermometerSingleChannel(RaspberryPiGPIODHT22Thermomet
     A custom build with a single DHT22 temperature sensor
     and a raspberry pi
     """
-
+   
     # define a pattern which defines this datastram
-    PATTERN =re.compile("(?P<timestamp>[A-Za-z0-9\s:]*)\s(?P<s1temp>[0-9\.-]*)\s(?P<s1humi>[0-9\.]*)")
+    PATTERN =re.compile("(?P<timestamp>[A-Za-z0-9\s:]*)\s(?P<s1temp>[0-9\.-]*)\s(?P<s1humi>[0-9\.]*)")   
     TYPES  = { "timestamp"  : lambda x: datetime.datetime.strptime(x,"%a %b %d %H:%M:%S %Y"),
                 "s1temp"    : lambda x: float(x),
                 "s1humi"    : lambda x: float(x)}
@@ -126,6 +158,7 @@ class RaspberryPiGPIODHT22ThermometerSingleChannel(RaspberryPiGPIODHT22Thermomet
                                         ( "s1humi"   , "")])
 
     TOPIC  = "SUNEC13"
+    TOPIC  = "SUNEC13"            
     METADATA = { "name"           : "RaspberryPiDHT22-1Channel",\
                  "twinax"         : True,\
                  "units"          : ["C", "\%"],\
@@ -141,7 +174,6 @@ class RaspberryPiGPIODHT22ThermometerSingleChannel(RaspberryPiGPIODHT22Thermomet
                }
     REVERSE_STRING_TEMPLATE = "{}\t{}\t{}"
 
-
     def __init__(self,
                  controller=GPIOController(data_getter=adafruit_dht22_getter, data_getter_kwargs={"pins" : [4]}),\
                  loglevel=20,\
@@ -151,9 +183,6 @@ class RaspberryPiGPIODHT22ThermometerSingleChannel(RaspberryPiGPIODHT22Thermomet
                                                               publish=publish, publish_port=publish_port)
         if publish:
             self._setup_port()
-
-
- 
 #class RaspberryPiGPIODHT22ThermometerProxy(RaspberryPiGPIODHT22Thermometer):
 #    """
 #    Connect to a remotly running RaspberryPiGPIODHT22Thermometer instance

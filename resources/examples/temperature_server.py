@@ -8,6 +8,8 @@ from skippylab.plugins.dht22 import adafruit_dht22_getter
 
 if __name__ == "__main__":
 
+    #controller = GPIOController(data_getter=adafruit_dht22_getter,\
+    #                            data_getter_kwargs = {"pins" : [4,14,17,24] })
     controller = GPIOController(data_getter=adafruit_dht22_getter,\
                                 data_getter_kwargs = {"pins" : [4] })
     thermo = RaspberryPiGPIODHT22ThermometerSingleChannel(controller=controller,\

@@ -14,6 +14,7 @@ from . import instruments, scpi, plotting, tools
 from matplotlib import get_configdir as mpl_configdir
 
 from . import loggers
+from .loggers import get_logger
 
 # easy access
 TektronixDPO4104B = instruments.TektronixDPO4104B
@@ -22,8 +23,8 @@ _appdir = _os.path.split(__file__)[0]
 _appname = _os.path.split(_appdir)[1]
 
 # the config files
-STYLE_BASEFILE_STD = _os.path.join(_appdir,"pyoscipresent.mplstyle")
-STYLE_BASEFILE_PRS = _os.path.join(_appdir,"pyoscidefault.mplstyle")
+STYLE_BASEFILE_STD = _os.path.join(_appdir,"skippylabpresent.mplstyle")
+STYLE_BASEFILE_PRS = _os.path.join(_appdir,"skippylabdefault.mplstyle")
 
 logger = loggers.get_logger(20)
 
