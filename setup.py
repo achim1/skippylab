@@ -33,8 +33,7 @@ setup(name='skippylab',
       install_requires=['numpy>=1.11.0',
                         'matplotlib>=1.5.0',
                         'appdirs>=1.4.0',
-                        'pyprind>=2.9.6',
-                        'pyserial>=3.4.0,
+                        'pyserial>=3.4.0',
                         'six>=1.1.0',
                         "python-vxi11>=0.9.0"],
       setup_requires=setup_requires,
@@ -52,7 +51,5 @@ setup(name='skippylab',
       keywords=["oscilloscope", "daq",\
                 "TektronixDPO4104B", "Tektronix",\
                 "readout", "physics", "engineering", "SCPI", "VISA", "vxi11"],
-      packages=['skippylab', 'skippylab.instruments', 'skippylab.scpi'],
-      #scripts=[],
-      #package_data={'skippylab': ['pyoscidefault.mplstyle','pyoscipresent.mplstyle']}
+      packages=['skippylab', 'skippylab.instruments', 'skippylab.scpi']
       )
