@@ -6,9 +6,8 @@ from .instruments import oscilloscopes
 from . import tools
 from .scpi import commands as cmd
 from . import plotting
-from .loggers import get_logger
 
-logger = get_logger(20)
+from .. import Logger
 
 import time
 import re
@@ -17,7 +16,7 @@ import pylab as p
 try:
     import zmq
 except ImportError:
-    logger.warning("No zmq available!")
+    Logger.warning("No zmq available!")
 
 
 from socket import timeout as TimeoutError
@@ -30,12 +29,12 @@ try:
     import pyprind
     bar_available = True
 except ImportError:
-    logger.warning("No pyprind available")
+    Logger.warning("No pyprind available")
 
 try:
     from functools import reduce
 except ImportError:
-    logger.warning("Can not import functools, this might be python 2.7?")
+    Logger.warning("Can not import functools, this might be python 2.7?")
 
 # helpers
 

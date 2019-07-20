@@ -7,22 +7,14 @@ import time
 
 from . import oscilloscopes as osci
 from ..scpi import commands as cmd
-from .. import loggers
+from .. import Logger
 
 try:
     from plx_gpib_ethernet import PrologixGPIBEthernet
 except ImportError as e:
-    logger = loggers.get_logger(10)
-    logger.warn('No plx_gpib_ethernet module installed')
+    Logger.warn('No plx_gpib_ethernet module installed')
 
 bar_available = False
-
-try:
-    import pyprind
-    bar_available = True
-except ImportError:
-    pass
-    #logger.warning("No pyprind available")
 
 setget = osci.setget
 #KCmd = cmd.Agilent3322OACommands
@@ -34,7 +26,7 @@ class Agilent3322OAFunctionGenerator(object):
     """
     #output = setget(KCmd.OUTPUT)
 
-    def __init__(self, ip="10.25.123.111", gpib_address=15, loglevel=20):
+    def __init__(self, ip="10.25.123.111", gpib_address=15):
         """
         Connect to the power supply via Prologix GPIB connector
 
@@ -46,7 +38,7 @@ class Agilent3322OAFunctionGenerator(object):
         gpib = PrologixGPIBEthernet(ip)
         gpib.connect()
         gpib.select(gpib_address)
-        self.logger = loggers.get_logger(loglevel)
+        self.logger = Logger
         self.instrument = gpib
         #self.P6 = KCmd.P6
         #self.P25 = KCmd.P25

@@ -7,12 +7,12 @@ import time
 
 from . import oscilloscopes as osci
 from ..scpi import commands as cmd
-from .. import loggers
+from .. import Logger
 
 bar_available = False
 
 try:
-    import pyprind
+    import tqdm
     bar_available = True
 except ImportError:
     pass
@@ -21,8 +21,7 @@ except ImportError:
 try:
     from plx_gpib_ethernet import PrologixGPIBEthernet
 except ImportError as e:
-    logger = loggers.get_logger(10)
-    logger.warn('No plx_gpib_ethernet module installed')
+    Logger.warn('No plx_gpib_ethernet module installed')
 
 setget = osci.setget
 KCmd = cmd.KeysightE3631APowerSupplyCommands
@@ -172,13 +171,11 @@ class KeysightE3631APowerSupply(object):
         safety_wait = 5
         if bar_available:
             bar = pyprind.ProgBar(safety_wait, track_time=True, title='Powering on...')
-
-        for i in range(safety_wait):
-            time.sleep(1)
-            if bar_available:
-                bar.update()
-            else:
-                print ("Powering on in {}".format(safety_wait - i))
+        if bar_available:
+            for i in tqdm.tqdm(range(safety_wait)):
+                time.sleep(1)
+        else:
+            self.logger.warning("Powering on in {}".format(safety_wait - i))
         self.output = KCmd.ON
 
     def measure_current(self, channel):

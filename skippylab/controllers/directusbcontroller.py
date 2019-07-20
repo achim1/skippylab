@@ -12,7 +12,7 @@ from time import sleep
 
 from six import with_metaclass
 
-from ..loggers import get_logger
+from .. import Logger
 
 class AbstractBaseController(with_metaclass(abc.ABCMeta,object),object):
     """

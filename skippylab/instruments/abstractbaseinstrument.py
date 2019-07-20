@@ -7,8 +7,7 @@ import abc
 import zmq
 
 #from ..controllers import DirectUSBController
-from ..loggers import get_logger
-
+from .. import Logger
 
 class AbstractBaseInstrument(object):
 
@@ -36,7 +35,7 @@ class AbstractBaseInstrument(object):
             publish_port (int): use this port if publish = True
         """
         self.controller = controller # default settings are ok
-        self.logger = get_logger(loglevel)
+        self.logger = Logger
         self.logger.debug("Instrument initialized")
         self.publish = publish
         self.port = publish_port

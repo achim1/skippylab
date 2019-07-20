@@ -12,7 +12,7 @@ import struct
 from six import with_metaclass
 
 from .. scpi import commands as cmd
-from .. import loggers
+from .. import Logger
 try:
     from .. import plotting
 except Exception as e:
@@ -74,7 +74,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
     ACQUIRE_ONE = cmd.RUN_SINGLE
     string_encoding = cmd.ENCODING_ISO
 
-    def __init__(self, ip="169.254.68.19", loglevel=20):
+    def __init__(self, ip="169.254.68.19"):
         """
         Connect to the scope via its socket server
 
@@ -86,7 +86,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         self.wf_buff_header = None # store a waveform header in case they are all the same
         self.instrument = vxi11.Instrument(ip)
         self.active_channel = None
-        self.logger = loggers.get_logger(loglevel)
+        self.logger = Logger
 
     def reopen_socket(self):
         """

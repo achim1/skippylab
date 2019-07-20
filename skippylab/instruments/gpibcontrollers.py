@@ -7,9 +7,8 @@ manage instruments which are connected via GPIB and the respective controller
 try:
     from plx_gpib_ethernet import PrologixGPIBEthernet
 except ImportError as e:
-    from .. import loggers
-    logger = loggers.get_logger(10)
-    logger.warn('pix_gpib_ethernet module not installed')
+    from .. import Logger
+    Logger.warn('pix_gpib_ethernet module not installed')
 
 def prologix_gpib_ethernet_provider(ip, gpib_addres):
     """
