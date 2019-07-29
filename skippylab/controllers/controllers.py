@@ -36,13 +36,20 @@ class AbstractBaseController(with_metaclass(abc.ABCMeta,object),object):
 
 class DirectUSBController(AbstractBaseController):
     """
-    Use when connecting an instrument directly to the USB prot, without any 
-    intermediate interface
+    Use when connecting an instrument directly
+    to the USB port, without any 
+    intermediate interface. Connection is using 
+    a serial interface via USB
     """
-    def __init__(self, device="/dev/ttyUSB0", baudrate=9600, bytesize=8,
-                 parity='N', stopbits=1, timeout=None,
-                 xonxoff=False, rtscts=False, write_timeout=None,
-                 dsrdtr=False, inter_byte_timeout=None, exclusive=None):
+    def __init__(self, device="/dev/ttyUSB0",
+                 baudrate=9600, bytesize=8,
+                 parity='N', stopbits=1,
+                 timeout=None,
+                 xonxoff=False, rtscts=False,
+                 write_timeout=None,
+                 dsrdtr=False,
+                 inter_byte_timeout=None,
+                 exclusive=None):
         """
         Open a new serial connection via an USB connection
 
@@ -60,10 +67,17 @@ class DirectUSBController(AbstractBaseController):
             inter_byte_timeout   : passed thru to serial
             exclusive            : passed thru to serial
         """
-        self.conn = serial.Serial(port=device, baudrate=baudrate, bytesize=bytesize,
-                                  parity=parity, stopbits=stopbits, timeout=timeout,
-                                  xonxoff=xonxoff, rtscts=rtscts, write_timeout=write_timeout,
-                                  dsrdtr=dsrdtr, inter_byte_timeout=inter_byte_timeout,
+        self.conn = serial.Serial(port=device,
+                                  baudrate=baudrate,
+                                  bytesize=bytesize,
+                                  parity=parity,
+                                  stopbits=stopbits,
+                                  timeout=timeout,
+                                  xonxoff=xonxoff,
+                                  rtscts=rtscts,
+                                  write_timeout=write_timeout,
+                                  dsrdtr=dsrdtr,
+                                  inter_byte_timeout=inter_byte_timeout,
                                   exclusive=exclusive)
 
 
@@ -126,19 +140,22 @@ class GPIOController(AbstractBaseController):
     """
 
     def __init__(self, gpio_pins=None,
+                 data_getter_kwargs = {},
                  data_getter=lambda : None,
                  data_setter=lambda x : None):
         """
         Keyword Args:
             gpio_pins (iterable of ints) : list of gpio pins to use
             data_getter (callable)       : callback to retrieve data
+            data_getter_kwargs (dict)    : call data_getter with these keyword args
             data_setter (callable)       : send commands to GPIO pins
         """
         self.pins = gpio_pins
         self.data_getter = data_getter
+        self.data_getter_kwargs = data_getter_kwargs
 
     def read(self):
-        return self.data_getter()
+        return self.data_getter(**self.data_getter_kwargs)
 
     def write(self, command):
         self.data_setter(command)
@@ -146,6 +163,38 @@ class GPIOController(AbstractBaseController):
     def query(self):
         raise NotImplementedError("Usually GPIO interfaces do not do queries, but if yours does, please override this method")
 
+class ZMQController(AbstractBaseController):
+    """
+    Gets the data from a network socket
+    """
+
+    def __init__(self, ip="0.0.0.0", port=9876, topicfilter="", encoder=lambda x : x):
+        """
+        Keyword Args:
+            ip (str)   : ip to listen on 
+            port (int) : port at ip
+
+        """
+        # super(ZMQController, self).__init__(publish=False)
+        # Socket to talk to server
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.connect ("tcp://{}:{}".format(ip,port))
+        self.topicfilter = topicfilter
+        self.socket.setsockopt(zmq.SUBSCRIBE, topicfilter.encode())
+        self.encoder = encoder
+
+    def read(self):
+        data = self.socket.recv().decode()
+        data = data.replace(self.topicfilter, "")
+        print (data)
+        return self.encoder(data)
+
+    def query(self,command):
+        raise NotImplementedError
+
+    def write(self,command):
+        raise NotImplementedError
 
 
 

@@ -1,2 +1,2 @@
-from .directusbcontroller import DirectUSBController, GPIOController, ZMQController
+from .controllers import DirectUSBController, GPIOController, ZMQController
 
