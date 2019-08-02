@@ -1,0 +1,2 @@
+# for usbtmc connections
+SUBSYSTEM=="usb", MODE="0666", GROUP="usbusers"

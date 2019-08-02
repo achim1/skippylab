@@ -22,7 +22,40 @@ Requirements
 * prologix-gpib-ethernet from github/pip: `pip install git+git://github.com/nelsond/prologix-gpib-ethernet.git`
 
 
-Supported oscilloscopes 
+A word on usbtmc
+-----------------
+
+Make sure the linux driver module 'usbtmc' is loaded, by checking with 'lsmod | grep tmc'. There is a [![usbtmc driver on github](https://github.com/imrehg/usbtmc.git)](https://github.com/imrehg/usbtmc.git), if it is not available.
+
+Maybe the installation of the usblit can help as well, this is not entirely clear at this point, issue `apt install libusb-1.0-0-dev` on an Ubuntu system 
+
+If the serial number despite the fact pythhon is executed with sudo right for an usbtmc instrument can not be read,[![this can help](https://www.oipapio.com/question-561736)](https://www.oipapio.com/question-561736). 
+
+
+Visa library implementations
+------------------------------
+
+There are a lot of different python packages related to visa installations, some eeven share the same name for the `import` statement! 
+
+
+Udev rules
+------------
+
+Since typically any resource created under `/dev/` will be read-only, `udev` rules are recommended.
+
+
+Supported instruments
+-------------------------
+
+
+GPIB controllers
+--------------------------
+
+Prologix Ethernet/USB (*I highly recommend the prologix controllers, there are cheap and have an open interface*)
+
+
+
+Oscilloscopes 
 ----------------------------------
 
 * Tektronix DPO4104B
@@ -30,17 +63,23 @@ Supported oscilloscopes
 * Rhode&Schwarz RTO1044
 
 
-Supported function generators
+Function generators
 ----------------------------------------
 
 * Agilent 33220A (via GPIB)
 
 
-Supported power supplies
+Power supplies
 ---------------------------------------
 
 * Keysight E3631A
 
+
+
+Patchpannels
+------------------
+
+* Cytec
 
 
 
