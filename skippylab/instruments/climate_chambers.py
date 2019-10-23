@@ -9,7 +9,7 @@ from .. controllers import PrologixUsbGPIBController
 import numpy as np
 import time 
 
-import pyplot as p
+import pylab as p
 import hepbasestack as hbs
 
 # visual adaptions for the jupyter notebook
@@ -100,7 +100,7 @@ class  SunChamber(object):
     #def __init__(self,gpib_adress=6, port=9999, publish=False):
     def __init__(self, controller, port=9999, publish=False):
         
-        assert (isinstance(controller, NI_GPIB_USB) or isinstance(controller, PrologixUsbGPIBController)), "The used controller has to be either the NI usb one or the prologix usb"
+        #@assert (isinstance(controller, NI_GPIB_USB) or isinstance(controller, PrologixUsbGPIBController)), "The used controller has to be either the NI usb one or the prologix usb"
         
         self.chamber = controller
         self.is_running = False
@@ -288,7 +288,7 @@ class  SunChamber(object):
             time.sleep(interval)
             yield n*interval, (temp1,temp2)
 
-    def monitor_internal_temperatures(self, maxtime=np.inf):
+    def monitor_temperatures(self, maxtime=np.inf):
         """
         Graphical representation of temperatures. If run in jupyter notebook
         the respective cell must include a %matplotlib notebook magic
@@ -296,6 +296,7 @@ class  SunChamber(object):
         Keyword Args:
             maxtime (float): Maximum time the plot is active (in sec)
         """
+        time_since_running = 0
         fig = p.figure(dpi=150)
         ax = fig.gca()
         ax.set_xlabel("time since start [s]")
@@ -313,7 +314,7 @@ class  SunChamber(object):
             datamins, datamaxes = [],[]
             for ch, line_plot in enumerate(line_plots):
             
-                temp = sunec.get_temperature(ch)
+                temp = self.get_temperature(ch)
                 secs, temps = line_plot.get_data()
                 secs = np.append(secs,sec)
                 temps = np.append(temps,temp)
@@ -346,6 +347,9 @@ class  SunChamber(object):
             fig.tight_layout()
             fig.canvas.draw()
             time.sleep(5)
+            time_since_running += 5
 
+            if time_since_running > maxtime:
+                return
 
         
