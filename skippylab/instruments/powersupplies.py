@@ -304,7 +304,7 @@ class Channel(object):
         for k in range(wait):
             voltages.append(self.voltage_as_is)
             currents.append(self.current_as_is)
-            times.append(time.monontonic() - time_since_start)
+            times.append(time.monotonic() - time_since_start)
             time.sleep(1)
             bar.update()
         return times, voltages, currents
