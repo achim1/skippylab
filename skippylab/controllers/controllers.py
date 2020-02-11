@@ -7,6 +7,9 @@ or use a GPIB-USB interface
 import abc
 import zmq
 import serial
+import socket 
+import select
+import telnetlib
 
 from time import sleep
 
@@ -196,5 +199,82 @@ class ZMQController(AbstractBaseController):
     def write(self,command):
         raise NotImplementedError
 
+class SimpleSocketController(AbstractBaseController):
+
+    def __init__(self, ip, port, terminator="\r\n", timeout=1):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.terminator = terminator
+        server_address = (ip, port)
+        self.socket.connect(server_address)
+        self.socket.setblocking(0)
+        self.timeout = timeout
+        
+        # switch to zmq
+        #self.context = zmq.Context()
+        #self.socket = self.context.socket(zmq.REQ)
+        #self.socket.connect(f"tcp://{ip}:{port}")
+        
+ 
+    @property
+    def _ready_to_recv(self):
+        ready = select.select([self.socket], [], [], self.timeout)
+        return ready[0]
 
 
+    def __del__(self):
+        self.socket.close()
+
+    def query(self, command):
+        self.socket.sendall("{}\r\n".format(command).encode())
+        #data = self.socket.poll()
+        data = b""
+        resp = True
+        while True:
+            if not self._ready_to_recv:
+                break
+            resp = self.socket.recv(16384)
+            data += resp
+            if len(resp) < 16384:
+                break
+        return data.decode().rstrip(self.terminator)
+
+    def read(self):
+        data = b""
+        #data = s.poll()
+        while True:
+            if not self._ready_to_recv:
+                break
+            resp = self.socket.recv(16384)
+            data += resp
+            print (resp)
+            print (len(resp))
+            if len(resp) < 16384:
+                break
+        return data.decode().rstrip(self.terminator).replace(self.terminator, "")
+
+    def write(self, command):
+        self.socket.sendall("{}\r\n".format(command).encode())
+
+class TelnetController(AbstractBaseController):
+
+    def __init__(self, ip, port, terminator="\r\n"):
+        self.socket = telnetlib.Telnet(ip, port)
+        self.terminator = terminator
+
+    def __del__(self):
+        self.socket.close()
+
+    def read(self):
+        data = self.socket.read_very_eager()
+        #data = self.socket.read_all()
+        return data.decode().rstrip(self.terminator)
+
+    def query(self, command):
+        self.socket.write("{}\r\n".format(command).encode())
+        sleep(0.5)
+        data = self.socket.read_very_eager()
+        #data = self.socket.read_all()
+        return data.decode().rstrip(self.terminator)
+
+    def write(self, command):
+        self.socket.write("{}\r\n".format(command).encode())
