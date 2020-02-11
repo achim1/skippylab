@@ -257,7 +257,7 @@ class  SunChamber(object):
         status = self.get_status()
         self.print_status(status)
 
-    def get_temperature(self, channel=0, timeout = 5):
+    def get_temperature(self, channel=0, timeout = 8):
         """
         Channel 0,1
         """
@@ -282,11 +282,14 @@ class  SunChamber(object):
         
         temp = query_temps(channel)
         start = time.monotonic()
+        passed_time = 0
         while np.isnan(temp):
             temp = query_temps(channel)
             time.sleep(0.5)
-            start = time.monotonic() - start
-            if start > timeout:
+            end  = time.monotonic()
+            passed_time = end - start
+            #start = time.monotonic() - start
+            if passed_time > timeout:
                 raise TimeoutError(f"Can not get a value for temperature within {timeout}")
                 break
         if self.publish and (self._socket is None):
@@ -357,7 +360,10 @@ class  SunChamber(object):
                 if ch == feedback_ch:
                     feedback_temp = temp
             
-            if (abs(feedback_temp) - abs(temp)) < 1:
+            if abs(abs(target_temp) - abs(feedback_temp)) < 1:
+                print (feedback_temp)
+                print (target_temp)
+                print ("Reached target temperature") 
                 return
 
             datamax = max(datamaxes)
@@ -375,8 +381,8 @@ class  SunChamber(object):
                 xmax += 1
 
             # update the plot
-            ax.set_xlim(xmin=xmin, xmax=xmax)
-            ax.set_ylim(ymin=datamin, ymax=datamax)
+            ax.set_xlim(left=xmin, right=xmax)
+            ax.set_ylim(bottom=datamin, top=datamax)
 
             fig.tight_layout()
             fig.canvas.draw()
@@ -386,5 +392,3 @@ class  SunChamber(object):
             if time_since_running > maxtime:
                 return
 
-            if (abs(temp) - abs(target_temp)) < 1:
-                return    
