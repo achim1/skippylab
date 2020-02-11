@@ -218,23 +218,31 @@ class  SunChamber(object):
         self._deactivate_bitio_channel(4)
 
 
-    def cooldown(self, target_temperature=-45, rate=3):
+    def cooldown(self, target_temperature=-45, rate=3, 
+                 channel_for_monitoring = 0):
         """
         A shortcut function to cool down the chamber to -45 deg 
         with about 3 deg per minute
+
+        Keyword Args:
+            channel_for_monitoring (int): use this temperature 
+                                          channel for monitoring
 
         """
         if (target_temperature > 0):
             raise ValueError("Cooldown function is meant to be used with temperatures < 0, because of the dry nitrogen valve which will NOT be opened by this function! Interior of the chamber might get too humid...")
         self.rate_as_set = rate
-        self.temperature_as_set = target_temperature
-        current_temperature = self.get_temperature()
+        # set the set temperature a little bit lower
+        # than the target temperature to make sure it gets reached
+        self.temperature_as_set = target_temperature - 3
+        current_temperature = self.get_temperature(channel_for_monitoring)
         start = time.monotonic()
-        while current_temperature > (target_temperature + 2):
+        while current_temperature > (target_temperature):
             now = time.monotonic() - start
             print ("Current temperature is {} C after {:4.2f} sec cooldown".format(current_temperature, now))
             time.sleep(5)
-
+            current_temperature - self.get_temperature(channel_for_monitoring)
+        self.temperature_as_set = target_temperature
         return None
 
     @staticmethod
@@ -249,28 +257,38 @@ class  SunChamber(object):
         status = self.get_status()
         self.print_status(status)
 
-    def get_temperature(self, channel=0):
+    def get_temperature(self, channel=0, timeout = 5):
         """
         Channel 0,1
         """
-        if channel == 0:
-            temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP0))
-        elif channel == 1:
-            temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP1))
-        elif channel == 2:
-            temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP2))
-        elif channel == 3:
-            temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP3))
-        else:
-            raise ValueError("Channel has to be either 0,1,2 or 3!")
-        #print ("Got channel temp of {}".format(temp))
-        
-        try:
-            temp = float(temp)
-        except ValueError:
-            #print ("Problems digesting {}".format(temp))
-            temp = np.nan
+        def query_temps(channel):
 
+            if channel == 0:
+                temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP0))
+            elif channel == 1:
+                temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP1))
+            elif channel == 2:
+                temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP2))
+            elif channel == 3:
+                temp = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.TEMP3))
+            else:
+                raise ValueError("Channel has to be either 0,1,2 or 3!")
+            #print ("Got channel temp of {}".format(temp))
+            try:
+                temp = float(temp)
+            except ValueError:
+                temp = np.nan
+            return temp 
+        
+        temp = query_temps(channel)
+        start = time.monotonic()
+        while np.isnan(temp):
+            temp = query_temps(channel)
+            time.sleep(0.5)
+            start = time.monotonic() - start
+            if start > timeout:
+                raise TimeoutError(f"Can not get a value for temperature within {timeout}")
+                break
         if self.publish and (self._socket is None):
             self._setup_port()
         if self.publish:
@@ -288,13 +306,21 @@ class  SunChamber(object):
             time.sleep(interval)
             yield n*interval, (temp1,temp2)
 
-    def monitor_temperatures(self, maxtime=np.inf):
+    def monitor_temperatures(self,
+                             maxtime=np.inf,
+                             target_temp=None,
+                             avtivate=False, 
+                             feedback_ch=0):
         """
         Graphical representation of temperatures. If run in jupyter notebook
         the respective cell must include a %matplotlib notebook magic
+        This function is blocking until either maxtime or target_temp is reached.
         
         Keyword Args:
-            maxtime (float): Maximum time the plot is active (in sec)
+            maxtime (float)    : Maximum time the plot is active (in sec)
+            target_temp (float): Return if target_temp is reached
+            activate (bool)    : if True, try to reach the target temperature, not only do monitoring 
+            feedback_temp (int): Use this channel for feedback for the temperature loop as monitoring 
         """
         time_since_running = 0
         fig = p.figure(dpi=150)
@@ -309,6 +335,10 @@ class  SunChamber(object):
         fig.show()
         fig.canvas.draw()
         fig.tight_layout()
+
+        feedback_temp = np.nan
+        if activate:
+            self.temperature_as_set = target_temp
         while True:
             sec = time.monotonic() - start_time
             datamins, datamaxes = [],[]
@@ -324,10 +354,14 @@ class  SunChamber(object):
                 datamaxes.append(max(temps))
                 xmin = min(secs)
                 xmax = max(secs)
-                
+                if ch == feedback_ch:
+                    feedback_temp = temp
+            
+            if (abs(feedback_temp) - abs(temp)) < 1:
+                return
+
             datamax = max(datamaxes)
             datamin = min(datamins)
-            #print(secs)
             if len(secs) == 1:
                 continue
         
@@ -352,4 +386,5 @@ class  SunChamber(object):
             if time_since_running > maxtime:
                 return
 
-        
+            if (abs(temp) - abs(target_temp)) < 1:
+                return    
