@@ -302,7 +302,7 @@ class  SunChamber(object):
         ax.set_xlabel("time since start [s]")
         ax.set_ylabel("temperature $^{\circ}$C")
         p.ion()
-        line_plots = [ax.plot(range(0), color=k, lw=3)[0] for k in ("r", "b", "g")]
+        line_plots = [ax.plot(range(0), color=k, lw=3)[0] for k in ("r", "b")]
 
         start_time = time.monotonic()
 
