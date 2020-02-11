@@ -3,7 +3,7 @@
 from enum import Enum
 
 from .abstractbaseinstrument import AbstractBaseInstrument
-from ..controllers import PrologixUsbGPIBController, NI_GPIB_USB
+from ..controllers import PrologixUsbGPIBController, NI_GPIB_USB, SimpleSocketController
 
 class CytecPatchPannelCommands:
 
@@ -13,6 +13,10 @@ class CytecPatchPannelCommands:
     REVISION         = "N"
     STATUS           = "S"
 
+class CytecConnectionType:
+    ETHER            = 1
+    GPIB             = 2
+    UNKNOWN          = 10
 # from the manual
 #‘0’ Successful operation, switch open
 #‘1’ Successful  operation, switch closed
@@ -44,18 +48,36 @@ class Cytec(AbstractBaseInstrument):
 
     def __init__(self, controller, port=9999, publish=False):
     
-        assert (isinstance(controller, NI_GPIB_USB) or isinstance(controller, PrologixUsbGPIBController)), "The use    d controller has to be either the NI usb one or the prologix usb"
+        #assert (isinstance(controller, NI_GPIB_USB) or isinstance(controller, PrologixUsbGPIBController)), "The use    d controller has to be either the NI usb one or the prologix usb"
     
         self._controller = controller
         self.publish = publish
         self.port = port
         self._socket = None
+        if (isinstance(controller, SimpleSocketController)): 
+            self.connection_type = CytecConnectionType.ETHER
+        else:
+            self.connection_type = CytecConnectionType.GPIB 
+
+    def _parse(self, response):
+        if self.connection_type == CytecConnectionType.ETHER:
+            response = response.replace("\r\n",";")
+        return response
+
 
     def identify(self):
         return self._controller.query(cppc.IDN)
 
     def get_current_settings(self):
-        return self._controller.query(cppc.CURRENT_SETTINGS)
+        data = self._controller.query(cppc.CURRENT_SETTINGS)
+        if self.connection_type == CytecConnectionType.ETHER:
+            data += self._controller.read()
+            data += self._controller.read()
+            data += self._controller.read()
+            data += self._controller.read()
+            data += self._controller.read()
+        data = self._parse(data)
+        return data
 
     def unlatch_all(self):
         return CytecPatchPannelStatus(self._controller.query(cppc.CLEAR))
@@ -65,11 +87,13 @@ class Cytec(AbstractBaseInstrument):
 
     @property
     def revision_number(self):
-        return self._controller.query(cppc.REVISION)
-
+        data = self._controller.query(cppc.REVISION)
+        data = self._parse(data)
+        return data
 
     def show_matrix(self):
         matrix = self._controller.query(cppc.STATUS)
+        matrix = self._parse(matrix)
         matrix = matrix.split(';')
         return matrix
 

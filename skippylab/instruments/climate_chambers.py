@@ -110,7 +110,7 @@ class  SunChamber(object):
 
         # sometimes the chamber needs a bit till it is responding
         # get the status a few times
-        self.get_temperature()
+        #self.get_temperature()
         self.get_status()
         self.get_status()
 
@@ -309,7 +309,7 @@ class  SunChamber(object):
     def monitor_temperatures(self,
                              maxtime=np.inf,
                              target_temp=None,
-                             avtivate=False, 
+                             activate=False, 
                              feedback_ch=0):
         """
         Graphical representation of temperatures. If run in jupyter notebook
