@@ -1,6 +1,11 @@
-#pp = risingsun.chamber.PrologixUsbGPIBController(gpib_adress=7)
-#print (pp.query('*IDN?'))
+"""
+Operate a multi switch module (patchpanel) manufactured by Cytec
+
+"""
+
+
 from enum import Enum
+import tqdm
 
 from .abstractbaseinstrument import AbstractBaseInstrument
 from ..controllers import PrologixUsbGPIBController, NI_GPIB_USB, SimpleSocketController
@@ -126,11 +131,19 @@ class Cytec(AbstractBaseInstrument):
         return explanation
 
     def latch_detector(self, det):
-        assert (det >= 0 and det < 4), "Detector numbers go from 0 to 3"
+        """
+        Latch a specific detector for a module used in the GAPS experiment
         
+        Args:
+            det (int) : detector number on the mudule (1-4)
+        """
+
+        assert (det >= 1 and det < 5), "Detector numbers go from 1 to 4"
+        self.unlatch_all()        
         # latch rows
-        for mod in self.MODULES:
-            for sw in self.ROWS[det]:
+        for mod in tqdm.tqdm(self.MODULES):
+            for sw in self.ROWS[det -1]:
+                #print (f"Latching module {mod} switch {sw}")
                 self.raw_latch(mod, sw)
 
 
