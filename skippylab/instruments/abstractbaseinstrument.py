@@ -17,7 +17,6 @@ class AbstractBaseInstrument(object):
                  "channels" : 4}
     
 
-
     def __init__(self,
                  controller=None,
                  loglevel=20,\

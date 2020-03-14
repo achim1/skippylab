@@ -1,8 +1,17 @@
+"""
+A bunch of implementations to deal with temperature/humidity senors connected
+to raspberry pis. This will typically run on a different machine than the rest 
+of the setup, so the implementation is server-client. 
+Most of the code is rather experiemental, and includes thermometers with multiple channels and also such which directly can draw a matplotlib plot in a gui.
+"""
+
 import time
 import re
 import hjson
 import collections
 import datetime
+import zmq
+import hepbasestack as hep
 
 import matplotlib.dates as mdates
 
@@ -13,6 +22,126 @@ try:
 except (ImportError, ModuleNotFoundError):
     adafruit_dht22_getter = lambda x : None
     print ("Can not import Adafruit_DHT")
+
+#######################################################################
+
+class RPIMultiChannelThermometer:
+    """
+    A thermometer build out of a raspberry pi + variaous sensors
+    Base class. Use either server or client implementation
+    """
+
+    @staticmethod
+    def _setup_serverside_socket(port):
+        """
+        Setup the port for publishing
+
+        Returns:
+            None
+        """
+        context = zmq.Context()
+        socket = context.socket(zmq.PUB)
+        socket.bind("tcp://0.0.0.0:%s" % int(port))
+        return socket
+ 
+
+
+
+######################################################################
+
+class RPIMultiChannelThermometerServer(RPIMultiChannelThermometer):
+
+
+    def __init__(self,
+                 loglevel=20,\
+                 data_getters=(None,),\
+                 data_getter_args=(None,),\
+                 data_getter_kwargs=(None,),\
+                 topics = (None,),\
+                 publish_port=9876):
+        """
+        Constructor needs read and write access to
+        the port
+
+        Keyword Args:
+            data_getters (tuple)       : a tuple of functions which are used 
+                                         to obtain the raw data from the sensor.
+            data_getter_args (tuple)   : Call data getters with this kwargs
+            data_getter_kwargs (tuple) : Call data getters with this kwargs
+            loglevel (int)             : 10: debug, 20: info, 30: warnlng....
+            publish_port (int)         : Open a zmq socket for this port and publish
+                                         the data on it for everybody to read. 
+            topcis (tuple)             : A topic is a unique string which is published when 
+                                         the data is published on the port to identify which    
+                                         sensor send the data.
+                                         Should be something descriptive, e.g. DRYBOX.
+        """
+        assert len(data_getters) == len(data_getter_args) == len(data_getter_kwargs) == len(topics), "Make sure each data getter has the appropriate args and kwargs and a topic"
+        super(RPIMultiChannelThermometerServer, self).__init__()
+
+        self.logger = log = hep.logger.get_logger(loglevel)
+        self.data_getters = data_getters
+        self.data_getter_args = data_getter_args
+        self.data_getter_kwargs = data_getter_kwargs
+        self.topics = topics
+        self.publish = False
+        if publish_port is not None:
+            self._socket = self._setup_serverside_socket(publish_port)
+            self.publish = True
+        self.logger.debug("Instrument initialized")
+
+    def __del__(self):
+        if self.publish:
+            self._socket.close()
+
+    def pull_data(self):
+        """
+        Use the data getters to pull data from the sensors. If the publish setting is given,
+        data will be published at the given port.
+        """
+        for i,getter in enumerate(self.data_getters):
+            args = [] if (self.data_getter_args[i] is None) else self.data_getter_args[i]
+            kwargs = {} if (self.data_getter_kwargs[i] is None) else self.data_getter_kwargs[i]
+            data = getter(*args, **kwargs)
+            if self.publish:
+                self._socket.send((self.topics[i] + "\t" + data).encode())
+            yield data
+
+    def measure_continuously(self, measurement_time=10, interval=5):
+        """
+        Do a continuous measurment
+
+        Keyword Args:
+            measurment_time (int) : measurment duration [seconds], can be np.inf
+            interval (int)        : measurment interval [seconds]
+
+        """
+        last_step = time.monotonic()
+        passed_time = 0
+        data = dict([(t,"") for t in self.topics])
+        while passed_time < measurement_time:
+            for i,result in enumerate(self.pull_data()):
+                data[self.topics[i]] = result
+            time.sleep(interval)
+            dt = time.monotonic() - last_step
+            last_step = time.monotonic()
+            passed_time += dt
+            yield data
+            #if payload is None:
+            #    self.logger.warning("Can not get data {}".format(payload))
+            #    continue
+            #if self.publish:
+            #    self._socket.send((self.TOPIC + "\t" + payload).encode())
+            #self.logger.debug("Got data {}".format(payload))
+            #yield payload
+
+#######################################################################
+
+class RPIMultiChannelThermometerClient(RPIMultiChannelThermometer):
+    pass
+
+
+#######################################################################
 
 class RaspberryPiGPIODHT22Thermometer(AbstractBaseInstrument):
     """
