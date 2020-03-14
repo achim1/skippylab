@@ -259,14 +259,20 @@ class Channel(object):
     Namespace to access the individual channels of
     the CAENN1471 HV power supply
     """
-    def __init__(self, channel, board, loglevel=30):
+    def __init__(self, channel, board, loglevel=30, time_delay=0.1):
         """
         Keyword Args:
-            loglevel (int) : 10 dbg, 20 info, 30 warn
+            loglevel (int)     : 10 dbg, 20 info, 30 warn
+            time_delay (float) : set a time delay to await the 
+                                 response. If this is too short
+                                 the responses might be garbage 
         """
         self.channel = channel
         self.board = board
         self.logger = get_logger(loglevel)
+        self.logger.debug(f"Initialize hannel {channel} ...")
+        self.time_delay = time_delay
+        self.logger.debug("done!")
     # per channel commands, set parameters
     def _set_parameter(self, parameter, value):
         command = "$BD:{:02d},CMD:SET,CH:{},PAR:{},VAL:{}".format(self.board.board,self.channel,parameter, str(value))
@@ -486,6 +492,7 @@ class CAENN1471HV(object):
         self.logger = get_logger(loglevel)
         self.logger.info('Opening connection to {}'.format(port))
         self.connection = CAENN1471HV.open_connection(port)
+        self.logger.info('Connection established!')
         self.board = board
         self.last_command = None
         # give the hv module some time to respond
@@ -495,6 +502,12 @@ class CAENN1471HV(object):
         self.channels = dict()
         # the channel number 0-3 are the 4 channels
         # channel 4 is all channels together
+        try:
+            nchannels = int(self.nchannels[0]) + 1
+        except Exception as e:
+            time.sleep(0.5)
+            nchannels = int(self.nchannels[0]) + 1
+        
         for i in range(int(self.nchannels[0]) + 1):
             thischan = Channel(i, board=self, loglevel=loglevel)
             if i < 4:
@@ -534,6 +547,7 @@ class CAENN1471HV(object):
         time.sleep(self.time_delay)
 
     def check_response(self,response):
+        self.logger.debug(f"Checking response {response}")
         err = CAENN1471HV.ERROR_STRING.match(response)
         if err is not None:
             errcode = err.groupdict()["errcode"]
@@ -552,9 +566,10 @@ class CAENN1471HV(object):
 
     def _listen(self):
         response = self.connection.read_all().decode()
-        if (not response):
-            time.sleep(0.1)
-            response = self.connection.read_all().decode()
+        if not response:
+            self.logger.debug("did not recieve response")
+            return
+        # FIMXE:
         self.check_response(response)
         success = CAENN1471HV.SUCCESS_STRING.match(response)
         if success is not None:
