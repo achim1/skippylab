@@ -2,6 +2,8 @@
 
 import time
 import datetime
+import dateutil.tz as tz
+import pytz
 import numpy as np
 import hjson
 import re 
@@ -28,6 +30,7 @@ def encoder(payload):
         #{'timestamp': '\tSun Mar 15 15:41:09 2020', 'temp': '27.52', 'humi': '34.64'}
 	#Sun Mar 15 15:41:09 2020	27.52	34.64
         result['timestamp'] =  datetime.datetime.strptime(parsed['timestamp'],"%a %b %d %H:%M:%S %Y")
+        result['timestamp'] = result['timestamp'].replace(tzinfo=pytz.timezone('UTC'))
         result['temp'] = float(parsed['temp'])
         result['humi'] = float(parsed['humi'])
     return result
