@@ -5,6 +5,12 @@ The sensor connects to the pi via the ic2 bus
 import time
 import sys 
 import datetime
+import dateutil.tz as tz
+import os
+
+# set the timezone to utc
+os.environ['TZ'] = 'UTC'
+time.tzset()
 
 try:
     import board
