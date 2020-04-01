@@ -120,7 +120,7 @@ class  SunChamber(object):
         self.port = port
         self._socket = None
         if logger is None:
-            self.logger = hbs.logging.get_logger(loglevel)
+            self.logger = hbs.logger.get_logger(loglevel)
         else:
             self.logger = logger
 
