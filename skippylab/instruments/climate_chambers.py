@@ -210,8 +210,8 @@ class  SunChamber(object):
         status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
         while not status:
             status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
-        self.last_status
-        return self.last_status
+        self.last_status = status
+        return status
 
     def _bit_io_channel_active(self, channel):
         """
