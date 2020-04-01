@@ -97,22 +97,35 @@ class  SunChamber(object):
                      "2" : "EE RAM error found (check default settings)", "3" : "ROM error found (call factory)"}]
     
 
-    #def __init__(self,gpib_adress=6, port=9999, publish=False):
-    def __init__(self, controller, port=9999, publish=False):
+    def __init__(self, controller, port=9999,
+                 publish=False, logger=None, loglevel=None):
+        """
+        Open the connection to a SUN EC13 climate chamber via a controller. 
         
-        #@assert (isinstance(controller, NI_GPIB_USB) or isinstance(controller, PrologixUsbGPIBController)), "The used controller has to be either the NI usb one or the prologix usb"
+        Args:
+            controller (skippylab.controllers.AbstractBaseController)  :  A gpib or whichever instance 
+                                                                          used to connect to the cmaber
+        Keyword Args:
+            port (int)              : A network port which is used to publish chamber 
+                                      sensor data if publish = True
+            publish (bool)          : Publish the temperature data of the internal sensors
+                                      on the network
+            logger (logging.Logger) : Use the logger instance to publish status messages
+                                      if None, a new logger is created with level loglevl
+            loglevel (int)          : The loglevel in case logger is not None
+        """
         
         self.chamber = controller
-        self.is_running = False
         self.publish = publish
         self.port = port
         self._socket = None
+        if logger is None:
+            self.logger = hbs.logging.get_logger(loglevel)
+        else:
+            self.logger = logger
 
         # sometimes the chamber needs a bit till it is responding
-        # get the status a few times
-        #self.get_temperature()
-        self.get_status()
-        self.get_status()
+        time.sleep(1)
 
         self.last_status = ""
         status = self.get_status()
@@ -130,7 +143,7 @@ class  SunChamber(object):
         context = zmq.Context()
         self._socket = context.socket(zmq.PUB)
         self._socket.connect("tcp://0.0.0.0:%s" % int(self.port))
-        return
+        return Nonen
 
     def _set_parameter(self, parameter, value):
         command = f"{parameter}={value}\r\n"
@@ -144,34 +157,56 @@ class  SunChamber(object):
     # a bunch of setters/getters
     temperature_as_set = setget(SUNEC13Commands.SETTEMP)
     rate_as_set = setget(SUNEC13Commands.RATE)
+    upper_temperature_limit_as_set = setget(SUNEC13Commands.UTL)
+    lower_temperature_limit_as_set = setget(SUNEC13Commands.LTL)
 
+    @property
+    def is_on(self):
+        status = self.get_status()
+        return status[0] == "Y" 
 
     @property
     def ON(self):
-        print ("Turning on chamber...")
+        self.logger.info("Turning on chamber...")
         self.chamber.write(SUNEC13Commands.ON)
 
     @property
     def OFF(self):
-        print ("Turning chamber off...")
-        if self.is_running:
-            print ("WARNING, will not turn off chamber whie it is operationg!!...")
-            return
+        self.logger.info("Turning chamber off...")
         self.chamber.write(SUNEC13Commands.OFF)
 
     def activate_heater(self):
+        """
+        Activate the internal heating system
+        """
         self.chamber.write(SUNEC13Commands.HON)
     
     def deactivate_heater(self):
+        """
+        Switch off the internal heating system
+        """
         self.chamber.write(SUNEC13Commands.HOFF)
 
     def activate_cooler(self):
+        """
+        This allows the chamber to draw liquid N2 to cool itself down.
+        """
+
         self.chamber.write(SUNEC13Commands.CON)
 
     def deactivate_cooler(self):
+        """
+        Closes the valve for liquid N2, prevents the chamber from drawing 
+        anymore LN2
+        """
+
         self.chamber.write(SUNEC13Commands.COFF)
 
     def get_status(self):
+        """
+        Make the chamber report on its internal status. Issues status command
+        to the chamber and parses return.
+        """
         self.last_status = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.STATUS))
         return self.last_status
 
@@ -209,16 +244,20 @@ class  SunChamber(object):
 
     def open_dry_nitrogen_valve(self):
         """
-        The dry nitrogen valve needs to be opened during the warm up
-        process to avoid humidity
+        The chamber has an additonal valve with a manual flow meter to allow
+        the purge with gaseous nitrogen. This opens this valve.
         """
         self._activate_bitio_channel(4)
 
     def close_dry_nitrogen_valve(self):
+        """
+        Close the valve for gaseous nitrogen, so that the chamber can 
+        not draw any dry nitrogen.
+        """
         self._deactivate_bitio_channel(4)
 
 
-    def cooldown(self, target_temperature=-45, rate=3, 
+    def cooldown(self, target_temperature=-37, rate=3, 
                  channel_for_monitoring = 0):
         """
         A shortcut function to cool down the chamber to -45 deg 
@@ -239,7 +278,7 @@ class  SunChamber(object):
         start = time.monotonic()
         while current_temperature > (target_temperature):
             now = time.monotonic() - start
-            print ("Current temperature is {} C after {:4.2f} sec cooldown".format(current_temperature, now))
+            self.logger.debug("Current temperature is {} C after {:4.2f} sec cooldown".format(current_temperature, now))
             time.sleep(5)
             current_temperature - self.get_temperature(channel_for_monitoring)
         self.temperature_as_set = target_temperature
@@ -361,9 +400,7 @@ class  SunChamber(object):
                     feedback_temp = temp
             
             if abs(abs(target_temp) - abs(feedback_temp)) < 1:
-                print (feedback_temp)
-                print (target_temp)
-                print ("Reached target temperature") 
+                self.logger.info(f"Reached target temperature of {target_temp}, feedback temp is reading {feedback_temp}") 
                 return
 
             datamax = max(datamaxes)
@@ -391,4 +428,5 @@ class  SunChamber(object):
 
             if time_since_running > maxtime:
                 return
+
 
