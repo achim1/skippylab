@@ -207,7 +207,10 @@ class  SunChamber(object):
         Make the chamber report on its internal status. Issues status command
         to the chamber and parses return.
         """
-        self.last_status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
+        status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
+        while not status:
+            status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
+        self.last_status
         return self.last_status
 
     def _bit_io_channel_active(self, channel):
