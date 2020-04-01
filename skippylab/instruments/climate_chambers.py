@@ -98,7 +98,7 @@ class  SunChamber(object):
     
 
     def __init__(self, controller, port=9999,
-                 publish=False, logger=None, loglevel=None):
+                 publish=False, logger=None, loglevel=20):
         """
         Open the connection to a SUN EC13 climate chamber via a controller. 
         
