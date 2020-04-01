@@ -36,6 +36,8 @@ class AbstractBaseController(with_metaclass(abc.ABCMeta,object),object):
     def read(self):
         raise NotImplementedError("Plain read is not implemented for this instrument, only 'query' and 'write'")
 
+    def query_with_timeout(self, question):
+        return self.query(question)
 
 class DirectUSBController(AbstractBaseController):
     """
@@ -107,11 +109,14 @@ class PrologixUsbGPIBController(AbstractBaseController):
             self.conn.write("++auto 1\n".encode())
 
 
-    def query(self, command):
+    def query(self, command, timeout=0.3):
         self.conn.write(f"{command}\n\n".encode())
         sleep(0.3) 
         resp = self.conn.read_all()
         return resp.decode().rstrip("\n")
+    
+    def query_with_timeout(self, command, timeout=0):
+        return self.query(command, timeout=timeout)
 
     def write(self, command):
         self.conn.write(f"{command}\n\n".encode())
