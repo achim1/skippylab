@@ -162,7 +162,7 @@ class  SunChamber(object):
 
     @property
     def is_on(self):
-        status = self.get_status()
+        status = self.get_status(nofail=True)
         return status[0] == "Y" 
 
     @property
@@ -202,14 +202,19 @@ class  SunChamber(object):
 
         self.chamber.write(SUNEC13Commands.COFF)
 
-    def get_status(self):
+    def get_status(self, nofail=False):
         """
         Make the chamber report on its internal status. Issues status command
         to the chamber and parses return.
+
+        Keyword Args:
+            nofail (bool) : if True, force an answer, that is the chamber will be asked
+                            for status until it returns it.
         """
         status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
-        while not status:
-            status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
+        if nofail:
+            while not status:
+                status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=3)
         self.last_status = status
         return status
 

@@ -480,6 +480,7 @@ class CAENN1471HV(object):
     def __init__(self, port='/dev/caen1471',
                  board=0,
                  time_delay=1,
+                 logger=None,
                  loglevel=30):
         """
         Set up a connection to a CAEN1471HV module via usb/serial connection.
@@ -489,7 +490,10 @@ class CAENN1471HV(object):
             board (int): board number
             loglevel (int) : 10 dbg, 20 info, 30 warn
         """
-        self.logger = get_logger(loglevel)
+        if logger is None:
+            self.logger = get_logger(loglevel)
+        else:
+            self.logger = logger
         self.logger.info('Opening connection to {}'.format(port))
         self.connection = CAENN1471HV.open_connection(port)
         self.logger.info('Connection established!')
@@ -502,13 +506,15 @@ class CAENN1471HV(object):
         self.channels = dict()
         # the channel number 0-3 are the 4 channels
         # channel 4 is all channels together
-        try:
-            nchannels = int(self.nchannels[0]) + 1
-        except Exception as e:
-            time.sleep(0.5)
-            nchannels = int(self.nchannels[0]) + 1
+        #try:
+        #    nchannels = int(self.nchannels[0]) + 1
+        #except Exception as e:
+        #    print (e)
+        #    time.sleep(1.5)
+        #    nchannels = int(self.nchannels[0]) + 1
         
-        for i in range(int(self.nchannels[0]) + 1):
+        #for i in range(int(self.nchannels[0]) + 1):
+        for i in [0,1,2,3,4]:
             thischan = Channel(i, board=self, loglevel=loglevel)
             if i < 4:
                 setattr(self, "channel{}".format(i),thischan)
@@ -517,7 +523,9 @@ class CAENN1471HV(object):
             self.channels[i] = thischan
 
     def __del__(self):
-        self.connection.close()
+        # suppress error for failed connections
+        if self.connection is not None:
+            self.connection.close()
 
     def __repr__(self):
         return "<CAENN1471HV: {} board no: {} serial number {}>".format(self.boardname[0], self.board, self.serial_number)
