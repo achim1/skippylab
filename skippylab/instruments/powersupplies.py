@@ -288,9 +288,13 @@ class Channel(object):
         self.logger.debug("Retrieved parameter {} for channel {}".format(response, self.channel, response))    
         return response    
    
-    def activate(self):
+    def activate(self, nonblocking=False):
         """
         Set channel to on 
+    
+        Keyword Args:
+            nonblocking (bool) : if True, return immediatly without any return value.
+
         """
         self.logger.info("Activating channel {}".format(self.channel))
         command = "$BD:{:02d},CMD:SET,CH:{},PAR:ON".format(self.board.board, self.channel)
@@ -301,6 +305,8 @@ class Channel(object):
         rate = self.ramp_up
         delta_v = np.array(self.voltage_as_set) - np.array(self.voltage_as_is)
         wait = int(delta_v/rate)
+        if nonblocking:
+            return None
         voltages, currents, times = [], [], []
         loader_string = "Ramping up HV..."
         if hbs.isnotebook():
@@ -347,9 +353,12 @@ class Channel(object):
         measured_currents = np.array(measured_currents)
         return measured_voltages, measured_currents
 
-    def deactivate(self):
+    def deactivate(self, nonblocking=False):
         """
         Set channel to off 
+
+        Keyword Args:
+            nonblocking (bool) : if True, return immediatly without return value
         """
         command = "$BD:{:02d},CMD:SET,CH:{},PAR:OFF".format(self.board.board, self.channel)
         self.board._send(command)
@@ -357,6 +366,8 @@ class Channel(object):
         rate = self.ramp_down
         delta_v =  np.array(self.voltage_as_is)
         wait = int(delta_v/rate)
+        if nonblocking:
+            return None
         loader_string = "Ramping down channel..."
         if hbs.isnotebook():
             bar = tqdm.tqdm_notebook(total=wait, desc=loader_string, leave=True)
@@ -364,7 +375,7 @@ class Channel(object):
             bar = tqdm.tqdm(total=wait, desc=loader_string, leave=True)
         for __ in range(wait):
             time.sleep(1)
-            bar.update
+            bar.update()
 
     @property
     def status(self):
