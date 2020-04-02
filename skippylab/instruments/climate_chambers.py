@@ -123,7 +123,7 @@ class  SunChamber(object):
             self.logger = hbs.logger.get_logger(loglevel)
         else:
             self.logger = logger
-
+        self.logger.debug("Initializing chamber")
         # sometimes the chamber needs a bit till it is responding
         time.sleep(1)
 
@@ -211,11 +211,13 @@ class  SunChamber(object):
             nofail (bool) : if True, force an answer, that is the chamber will be asked
                             for status until it returns it.
         """
-        status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.5)
+        self.logger.debug("Getting status...")
+        status = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.STATUS))
         if nofail:
             while not status:
-                status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=3)
+                status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=0.5)
         self.last_status = status
+        self.logger.debug('... done.')
         return status
 
     def _bit_io_channel_active(self, channel):

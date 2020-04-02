@@ -108,6 +108,13 @@ class PrologixUsbGPIBController(AbstractBaseController):
         if set_auto_mode:
             self.conn.write("++auto 1\n".encode())
 
+    def powercycle(self):
+        """
+        Powercycle the controller, that is issue a power on reset command
+        """
+        print ("Warning! Powercycling controller...")
+        self.conn.write("++rst\n".encode())
+        time.sleep(5)
 
     def query(self, command, timeout=0.3):
         self.conn.write(f"{command}\n\n".encode())
