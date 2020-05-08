@@ -104,12 +104,30 @@ class PrologixUsbGPIBController(AbstractBaseController):
     def __init__(self, port='/dev/ttyUSB0', gpib_adress=6, stopbits=2, set_auto_mode=True):
         self.conn = serial.Serial(port=port, stopbits=stopbits)    
         self.conn.write(f"++addr {gpib_adress}\n".encode())
+        #self.send_clear_signal()
         self.conn.write("++eos 0\n".encode())
         if set_auto_mode:
             self.conn.write("++auto 1\n".encode())
 
     def __del__(self):
+        """
+        Make sure stale connections get closed
+        """
         self.conn.close()
+
+    def send_clear_signal(self):
+        """
+        Send clear signal to given address
+        """
+        self.conn.write("++clr\n".encode())
+
+    def powercycle(self):
+        """
+        Powercycle the controller, that is issue a power on reset command
+        """
+        print ("Warning! Powercycling controller...")
+        self.conn.write("++rst\n".encode())
+        sleep(5)
 
     def query(self, command, timeout=0.3):
         self.conn.write(f"{command}\n\n".encode())
