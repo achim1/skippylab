@@ -108,6 +108,8 @@ class PrologixUsbGPIBController(AbstractBaseController):
         if set_auto_mode:
             self.conn.write("++auto 1\n".encode())
 
+    def __del__(self):
+        self.conn.close()
 
     def query(self, command, timeout=0.3):
         self.conn.write(f"{command}\n\n".encode())

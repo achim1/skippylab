@@ -133,6 +133,10 @@ class  SunChamber(object):
         if publish:
             self._setup_port()
 
+    def __del__(self):
+        del self.chamber
+
+
     def _setup_port(self):
         """
         Setup the port for publishing
