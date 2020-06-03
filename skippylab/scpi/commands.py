@@ -1,6 +1,5 @@
 """
-A namespace for oscilloscope string commands. The commands are send as ASCII
-to the scope using a socket connection
+Instrument specific commands.
 """
 
 ENCODING_UTF8 = "utf-8"
@@ -28,6 +27,7 @@ def add_arg(cmd, arg):
         cmd = cmd + " " + arg
     return cmd
 
+#################################################
 
 def concat(*cmd):
     """
@@ -47,7 +47,7 @@ def concat(*cmd):
         concated += ":" + str(c) + "; "
     return concated
 
-
+#####################################################
 #def decode(response):
 #    """
 #    Decode osciloscope response from bytes to a string, cleaning
@@ -68,6 +68,7 @@ def concat(*cmd):
 #        response = None
 #    return response
 
+#####################################################
 
 def clean_response(response):
     """
@@ -88,6 +89,7 @@ def clean_response(response):
     response = response.replace("\n", "")
     return response
 
+#####################################################
 
 def parse_curve_data(header, curve):
     """
@@ -106,6 +108,7 @@ def parse_curve_data(header, curve):
 
     curve.replace("#", "")
 
+#####################################################
 
 #def encode(cmd):
 #    """
@@ -127,6 +130,8 @@ def parse_curve_data(header, curve):
 #    # python3 needs byterepresentation for socket
 #    return cmd.encode("utf8")
 
+#####################################################
+
 def histbox_coordinates(left, top, right, bottom):
     """
     Create a string for the box coordinates for the
@@ -145,7 +150,7 @@ def histbox_coordinates(left, top, right, bottom):
     command = concat([left, top, right, bottom])
     return command
 
-
+#####################################################
 
 #
 # COMMANDS!

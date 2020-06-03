@@ -39,13 +39,13 @@ setup(name='skippylab',
       setup_requires=setup_requires,
       tests_require=tests_require,
       license="GPL",
-      platforms=["Ubuntu 14.04","Ubuntu 16.04"],
+      platforms=["Ubuntu 18.04"],
       classifiers=[
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
         "Intended Audience :: Developers",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
         "Topic :: Scientific/Engineering :: Physics"
               ],
       keywords=["oscilloscope", "daq",\

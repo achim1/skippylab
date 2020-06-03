@@ -1,12 +1,18 @@
 """
 Plugin function to read out a sensirion sh31 temperature/humidity sensor
-The sensor connects to the pi via the ic2 bus
+The sensor connects to the pi via the ic2 bus. The sh31 is more precise than
+the DHT22, but also more expensive and the ic2 bus is more succseptible to 
+bad cables and connections. However, it offeres a much higher polling rate (several Hertz)
 """
 import time
 import sys 
 import datetime
 import dateutil.tz as tz
 import os
+
+import skippylab
+import hepbasestack.logger as log
+Logger = log.get_logger(skippylab.LOGLEVEL)
 
 # set the timezone to utc
 os.environ['TZ'] = 'UTC'
@@ -17,12 +23,16 @@ try:
     import busio
     import adafruit_sht31d
 except ModuleNotFoundError:
-    print ("Can not use adafruit dht sensors on this machine. Try installing requirements with pip3 install adafruit-circuitpython-sht31d")
+    Logger.warning("Can not use adafruit dht sensors on this machine. Try installing requirements with pip3 install adafruit-circuitpython-sht31d")
 
 
 def sht31d_getter():
     """
-    Query the sensor
+    Query the sensor. In case of failure, retry and 
+    eventually return nan
+
+    Returns:
+        str    
     """
 
     i2c = busio.I2C(board.SCL, board.SDA)
@@ -49,6 +59,7 @@ def sht31d_getter():
 
 if __name__ == '__main__':
     
+    print ("Testing the sensor...")
     while True:
         print (sht31d_getter())
         time.sleep(2)

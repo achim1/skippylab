@@ -5,9 +5,10 @@ There are two main types of equipment one can have in the lab:
 """
 import abc
 import zmq
+import hepbasestack.logger as log
+import skippylab
 
-#from ..controllers import DirectUSBController
-from .. import Logger
+Logger = log.get_logger(skippylab.LOGLEVEL)
 
 class AbstractBaseInstrument(object):
 

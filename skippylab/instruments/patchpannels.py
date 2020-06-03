@@ -2,8 +2,6 @@
 Operate a multi switch module (patchpanel) manufactured by Cytec
 
 """
-
-
 from enum import Enum
 import tqdm
 

@@ -1,20 +1,18 @@
-#! /usr/bin/env python3
 """
-Control SUN EC13 temperature chamber
+Control SUN EC13 temperature chamber. This device can maintain a certain
+temperature and drive temperature profiles. 
 """
-
-#from .ni_gpib_usb import NI_GPIB_USB 
-from .. controllers import PrologixUsbGPIBController
 
 import numpy as np
 import time 
-
+import skippylab
 import pylab as p
 import hepbasestack as hbs
 
 # visual adaptions for the jupyter notebook
 hbs.visual.set_style_default()
 
+from .. controllers import PrologixUsbGPIBController
 
 try:
     import zmq 
@@ -71,7 +69,10 @@ def setget(parameter, getter_only = False, doc=None):
                         lambda self, value: self._set_parameter(parameter,value), doc=doc)
 
 
-class  SunChamber(object):
+class SunChamber(object):
+    """
+    The Sun EC13 temperature chamber allows for a temperature controlled environment.
+    """
 
     axis_label = "Temperature "
     temperature_unit = "C"
@@ -98,7 +99,7 @@ class  SunChamber(object):
     
 
     def __init__(self, controller, port=9999,
-                 publish=False, logger=None, loglevel=20):
+                 publish=False, logger=None, loglevel=skippylab.LOGLEVEL):
         """
         Open the connection to a SUN EC13 climate chamber via a controller. 
         

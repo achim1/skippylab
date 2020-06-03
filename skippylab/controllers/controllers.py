@@ -10,14 +10,21 @@ import serial
 import socket 
 import select
 import telnetlib
-
+import hepbasestack as hep
 from time import sleep
 
-from six import with_metaclass
+import skippylab
+Logger = hep.logger.get_logger(skippylab.LOGLEVEL)
 
-from .. import Logger
+HAS_VISA = False
+try:
+    import visa
+    HAS_VISA = True
+except ImportError:
+    Logger.warning("Can not use NI_GPIB_USB controller, need to install visa library. Search pypi or github")
+    
 
-class AbstractBaseController(with_metaclass(abc.ABCMeta,object),object):
+class AbstractBaseController(meataclass=abc.ABCMeta,object):
     """
     Defines the minimal interface of a controller
     """
@@ -93,7 +100,7 @@ class DirectUSBController(AbstractBaseController):
         return resp.decode().rstrip("\n")
 
     def write(self,command):
-         self.conn.write("{}\r\n".format(command).encode())
+        self.conn.write("{}\r\n".format(command).encode())
 
     def read(self):
         return self.conn.read_all().decode()
@@ -125,7 +132,7 @@ class PrologixUsbGPIBController(AbstractBaseController):
         """
         Powercycle the controller, that is issue a power on reset command
         """
-        print ("Warning! Powercycling controller...")
+        Logger.warning("Warning! Powercycling controller...")
         self.conn.write("++rst\n".encode())
         sleep(5)
 
@@ -143,23 +150,6 @@ class PrologixUsbGPIBController(AbstractBaseController):
         return None
 
 
-try:
-    import visa
-except ImportError:
-    print ("Can not use NI_GPIB_USB controller, need to install visa library. Search pypi or github")
-
-class NI_GPIB_USB(AbstractBaseController):
-
-    def __init__(self,gpib_adress=6, port=9999, publish=False):
-        resource_manager = visa.ResourceManager()
-        print("Found the following visa resources : {}".format(resource_manager.list_resources()))
-        chamber_found = False
-        try:
-            self.resource = resource_manager.open_resource(resource_manager.list_resources()[0])
-            resource_found = True
-        except IndexError:
-            print("Can not find any visa resources!")
-            self.resource = None
 
 
 class GPIOController(AbstractBaseController):
@@ -215,7 +205,6 @@ class ZMQController(AbstractBaseController):
     def read(self):
         data = self.socket.recv().decode()
         data = data.replace(self.topicfilter, "")
-        print (data)
         return self.encoder(data)
 
     def query(self,command):
@@ -271,8 +260,6 @@ class SimpleSocketController(AbstractBaseController):
                 break
             resp = self.socket.recv(16384)
             data += resp
-            print (resp)
-            print (len(resp))
             if len(resp) < 16384:
                 break
         return data.decode().rstrip(self.terminator).replace(self.terminator, "")
@@ -303,3 +290,19 @@ class TelnetController(AbstractBaseController):
 
     def write(self, command):
         self.socket.write("{}\r\n".format(command).encode())
+
+if HAS_VISA:
+    class NI_GPIB_USB(AbstractBaseController):
+    
+        def __init__(self,gpib_adress=6, port=9999, publish=False):
+            resource_manager = visa.ResourceManager()
+            Logger.info("Found the following visa resources : {}".format(resource_manager.list_resources()))
+            chamber_found = False
+            try:
+                self.resource = resource_manager.open_resource(resource_manager.list_resources()[0])
+                resource_found = True
+            except IndexError:
+                Logger.critical("Can not find any visa resources!")
+                self.resource = None
+
+
