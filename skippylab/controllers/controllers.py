@@ -24,7 +24,7 @@ except ImportError:
     Logger.warning("Can not use NI_GPIB_USB controller, need to install visa library. Search pypi or github")
     
 
-class AbstractBaseController(meataclass=abc.ABCMeta,object):
+class AbstractBaseController(metaclass=abc.ABCMeta):
     """
     Defines the minimal interface of a controller
     """

@@ -20,12 +20,18 @@ For direct, serial connection via USB
 To take control over GPIO pins on a raspberry pi
     GPIOController
 """
-
+from . import controllers as _controllers
+HAS_VISA = _controllers.HAS_VISA
 
 from .controllers import DirectUSBController,\
                          GPIOController,\
                          ZMQController,\
                          PrologixUsbGPIBController,\
-                         NI_GPIB_USB,\
                          SimpleSocketController,\
                          TelnetController
+
+if HAS_VISA:
+    from .controllers import NI_GPIB_USB
+
+del _controllers
+

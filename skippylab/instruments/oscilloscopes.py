@@ -9,10 +9,14 @@ import pylab as p
 import vxi11
 import re
 import struct
-from six import with_metaclass
+import hepbasestack as hep
 
 from .. scpi import commands as cmd
-from .. import Logger
+
+import skippylab
+Logger = hep.logger.get_logger(skippylab.LOGLEVEL)
+
+
 try:
     from .. import plotting
 except Exception as e:
@@ -28,13 +32,6 @@ try:
     bar_available = True
 except ImportError:
     pass
-
-try:
-    # Python 2
-    from itertools import izip
-except ImportError:
-    # Python 3
-    izip = zip
 
 from functools import reduce
 
@@ -63,7 +60,7 @@ def setget(command):
                     lambda self, value: self._set(aarg(command, value)))
 
 
-class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
+class AbstractBaseOscilloscope(metaclass=abc.ABCMeta):
     """
     A oscilloscope with a high sampling rate in the order of several
     gigasamples. Defines the scope API the DAQ reiles on
@@ -110,7 +107,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         """
         if self.connect_trials == self.MAXTRIALS:
             self.connect_trials = 0
-            raise vxi11.vxi11.Vxi11Exception("TimeOut")
+            raise vxi11.vxi11.Vxi11Exception(f"The number of trials to send a command has been exceed. MAXTRIALS had been set to {self.MAXTRIALS}")
 
         self.logger.debug("Sending {}".format(command))
         try:
@@ -132,7 +129,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         Returns:
             None
         """
-        self.logger.debug("Sending {}".format(command))
+        self.logger.debug(f"Sending {command}")
         self.instrument.write(command, encoding=self.string_encoding)
 
     def ping(self):
@@ -141,7 +138,7 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         """
 
         ping = self._send(cmd.WHOAMI)
-        self.logger.info("Scope responds to {} with {}".format(cmd.WHOAMI, ping))
+        self.logger.info(f"Scope responds to {cmd.WHOAMI} with {ping}")
         return True if ping else False
 
     # def run(self):
@@ -227,64 +224,6 @@ class AbstractBaseOscilloscope(with_metaclass(abc.ABCMeta, object)):
         """
         self.instrument.close()
 
-
-class Waveform(with_metaclass(abc.ABCMeta, object)):
-    """
-    A non-oscilloscope dependent representation of a measured
-    waveform
-    """
-
-    def __init__(self, header, raw_waveform):
-        """
-        Args:
-            header (dict): Metadata, like xs, units, etc.
-            raw_waveform (np.ndarray/list): The voltage data for one or more wavefomrs
-        """
-
-        self.header = header
-        if not isinstance(raw_waveform, list):
-            raw_waveform = [raw_waveform]
-
-        self.data = raw_waveform
-
-    #@abc.abstractmethod
-    #def convert(self):
-    #    pass
-
-    @abc.abstractmethod
-    def time_bins(self):
-        pass
-
-    @abc.abstractmethod
-    def volts(self):
-        pass
-
-    @abc.abstractmethod
-    def save(self):
-        pass
-
-    @abc.abstractmethod
-    def load(self):
-        pass
-    
-# class TektronixWaveform(Waveform):
-#     """
-#     A bundle of waveforms
-#     """
-#
-#     def _convert_volts(self, waveform):
-#         voltages = ((waveform - (np.ones(len(waveform)) * self.header["yoff"])) \
-#                     * (np.ones(len(waveform)) * self.header["ymult"])) \
-#                    + (np.ones(len(waveform)) * self.header["yzero"])
-#         return voltages
-#
-#     def volts(self):
-#         converted = []
-#         for waveform in self.data:
-#             converted.append(self._convert_volts(waveform))
-#
-#         return converted
-#
 class UnknownOscilloscope(AbstractBaseOscilloscope):
     """
     Use for testing and debugging
@@ -318,19 +257,19 @@ class TektronixDPO4104B(AbstractBaseOscilloscope):
     """
 
     # setget properties
-    source = setget(cmd.SOURCE)
-    data_start = setget(cmd.DATA_START)
-    data_stop = setget(cmd.DATA_STOP)
-    data_width = setget(TCmd.WF_BYTEWIDTH)
+    source       = setget(cmd.SOURCE)
+    data_start   = setget(cmd.DATA_START)
+    data_stop    = setget(cmd.DATA_STOP)
+    data_width   = setget(TCmd.WF_BYTEWIDTH)
     waveform_enc = setget(cmd.WF_ENC)
-    acquire = setget(cmd.RUN)
+    acquire      = setget(cmd.RUN)
     acquire_mode = setget(TCmd.ACQUISITON_MODE)
 
-    data = setget(cmd.DATA)
+    data         = setget(cmd.DATA)
     trigger_frequency_enabled = setget(TCmd.TRIGGER_FREQUENCY_ENABLED)
-    histbox = setget(cmd.HISTBOX)
-    histstart = setget(cmd.HISTSTART)
-    histend = setget(cmd.HISTEND)
+    histbox      = setget(cmd.HISTBOX)
+    histstart    = setget(cmd.HISTSTART)
+    histend      = setget(cmd.HISTEND)
 
 
     # FIXME make it a property
@@ -940,7 +879,7 @@ class RhodeSchwarzRTO1044(AbstractBaseOscilloscope):
         """
         wf_command = aarg(self.active_channel,RSCmd.CURVE)
         raw_wf = self._send(wf_command)
-        pairs = izip(*[iter(raw_wf.split(","))]*2)
+        pairs = zip(*[iter(raw_wf.split(","))]*2)
         times, volts = [],[]
         for val in pairs:
             volts.append(float(val[1]))

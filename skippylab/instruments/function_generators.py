@@ -4,10 +4,12 @@ Function generators
 """
 import time
 
-
 from . import oscilloscopes as osci
 from ..scpi import commands as cmd
-from .. import Logger
+
+import skippylab
+Logger = hep.logger.get_logger(skippylab.LOGLEVEL)
+
 
 try:
     from plx_gpib_ethernet import PrologixGPIBEthernet
