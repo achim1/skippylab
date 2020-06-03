@@ -269,8 +269,11 @@ class SimpleSocketController(AbstractBaseController):
 
 class TelnetController(AbstractBaseController):
 
-    def __init__(self, ip, port, terminator="\r\n"):
-        self.socket = telnetlib.Telnet(ip, port)
+    def __init__(self, ip, port, terminator="\r\n", timeout=None):
+        if timeout is not None:
+            self.socket = telnetlib.Telnet(ip, port, timeout=timeout)
+        else:
+            self.socket = telnetlib.Telnet(ip, port)
         self.terminator = terminator
 
     def __del__(self):
