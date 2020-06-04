@@ -492,21 +492,25 @@ class CAENN1471HV(object):
                  board=0,
                  time_delay=1,
                  logger=None,
-                 loglevel=30):
+                 loglevel=30,
+                 silent=False):
         """
         Set up a connection to a CAEN1471HV module via usb/serial connection.
 
         Keyword Args:
-            port (str):  unix device file, e.g. /dev/ttyUSB0 or /dev/caen1471
-            board (int): board number
+            port (str)     : unix device file, e.g. /dev/ttyUSB0 or /dev/caen1471
+            board (int)    : board number
             loglevel (int) : 10 dbg, 20 info, 30 warn
+            silent  (bool) : suppress additional output, faster initialization
         """
         if logger is None:
             self.logger = get_logger(loglevel)
         else:
             self.logger = logger
+        self.silent = silent
+        self.connection = None
         self.logger.info('Opening connection to {}'.format(port))
-        self.connection = CAENN1471HV.open_connection(port)
+        self.connection = CAENN1471HV.open_connection(port, self.silent)
         self.logger.info('Connection established!')
         self.board = board
         self.last_command = None
@@ -542,17 +546,18 @@ class CAENN1471HV(object):
         return "<CAENN1471HV: {} board no: {} serial number {}>".format(self.boardname[0], self.board, self.serial_number)
 
     @staticmethod
-    def open_connection(port):
+    def open_connection(port, silent=False):
         conn = serial.Serial(port=port, xonxoff=True)   
         loader_string = "Establishing connection..."
-        if hbs.isnotebook():
-            bar = tqdm.tqdm_notebook(total=10, desc=loader_string, leave=True)
-        else:
-            bar = tqdm.tqdm(total=10, desc=loader_string, leave=True)
+        if not silent:
+            if hbs.isnotebook():
+                bar = tqdm.tqdm_notebook(total=10, desc=loader_string, leave=True)
+            else:
+                bar = tqdm.tqdm(total=10, desc=loader_string, leave=True)
 
-        for __ in range(10):
-            time.sleep(0.05)
-            bar.update()
+            for __ in range(10):
+                time.sleep(0.05)
+                bar.update()
         return conn
 
     # low level read/write

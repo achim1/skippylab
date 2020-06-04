@@ -108,8 +108,28 @@ class DirectUSBController(AbstractBaseController):
 
 class PrologixUsbGPIBController(AbstractBaseController):
 
-    def __init__(self, port='/dev/ttyUSB0', gpib_adress=6, stopbits=2, set_auto_mode=True):
-        self.conn = serial.Serial(port=port, stopbits=stopbits)    
+    def __init__(self, port='/dev/ttyUSB0',\
+                 gpib_adress=6, stopbits=2,\
+                 set_auto_mode=True,
+                 timeout=None):
+        """
+        Open a new connection to a prologix gpib controller, usb version .
+        The connection is basically a serial connection over useb.
+
+        Keyword Args:
+            port (str)         : the device string where the serial tty listens
+            gpib_address (int) : GPIB address of the target device. The GPIB controller
+                                 can handle up to 15 addresses, but only one 
+                                 at a time
+            timeout (int)      : timeout in seconds. If None, wait forever. Otherwise
+                                 return without establishing a connection.
+
+        """
+
+        try:
+            self.conn = serial.Serial(port=port, stopbits=stopbits, timeout=timeout)    
+        except Exception as e:
+            self.conn = None
         self.conn.write(f"++addr {gpib_adress}\n".encode())
         #self.send_clear_signal()
         self.conn.write("++eos 0\n".encode())
@@ -120,7 +140,8 @@ class PrologixUsbGPIBController(AbstractBaseController):
         """
         Make sure stale connections get closed
         """
-        self.conn.close()
+        if self.conn is not None:
+            self.conn.close()
 
     def send_clear_signal(self):
         """
