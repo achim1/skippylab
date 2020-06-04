@@ -16,7 +16,9 @@ import hepbasestack as hep
 import matplotlib.dates as mdates
 
 from .abstractbaseinstrument import AbstractBaseInstrument
-from ..controllers import GPIOController
+from .. import controllers as contr
+#from .. import controllers import GPIOController
+
 try:
     from ..plugins.dht22 import adafruit_dht22_getter
 except (ImportError, ModuleNotFoundError):
@@ -190,7 +192,7 @@ class RaspberryPiGPIODHT22Thermometer(AbstractBaseInstrument):
     
 
     def __init__(self,
-                 controller=GPIOController(data_getter=adafruit_dht22_getter, data_getter_kwargs={"pins" : [4,14,17,24]}),\
+                 controller=contr.GPIOController(data_getter=adafruit_dht22_getter, data_getter_kwargs={"pins" : [4,14,17,24]}),\
                  loglevel=20,\
                  publish=False,
                  publish_port=9876):
@@ -304,7 +306,7 @@ class RaspberryPiGPIODHT22ThermometerSingleChannel(RaspberryPiGPIODHT22Thermomet
     REVERSE_STRING_TEMPLATE = "{}\t{}\t{}"
 
     def __init__(self,
-                 controller=GPIOController(data_getter=adafruit_dht22_getter, data_getter_kwargs={"pins" : [4]}),\
+                 controller=contr.GPIOController(data_getter=adafruit_dht22_getter, data_getter_kwargs={"pins" : [4]}),\
                  loglevel=20,\
                  publish=False,
                  publish_port=9876):

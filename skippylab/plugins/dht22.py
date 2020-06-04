@@ -7,7 +7,7 @@ import datetime
 import time
 import hepbasestack.logger as log
 import skippylab
-Logger = log.get_logger(skippylab.logleve)
+Logger = log.get_logger(skippylab.LOGLEVEL)
 
 HAS_DHT = False
 try:

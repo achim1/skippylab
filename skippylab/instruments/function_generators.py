@@ -8,6 +8,7 @@ from . import oscilloscopes as osci
 from ..scpi import commands as cmd
 
 import skippylab
+import hepbasestack as hep
 Logger = hep.logger.get_logger(skippylab.LOGLEVEL)
 
 

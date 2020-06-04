@@ -6,7 +6,7 @@ from enum import Enum
 import tqdm
 
 from .abstractbaseinstrument import AbstractBaseInstrument
-from ..controllers import PrologixUsbGPIBController, NI_GPIB_USB, SimpleSocketController
+from ..controllers import PrologixUsbGPIBController, SimpleSocketController
 
 class CytecPatchPannelCommands:
 

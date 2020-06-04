@@ -3,7 +3,7 @@ Package to read out TektronixDPO4104B oscilloscope
 """
 
 __version__ = "0.0.16"
-__all__ = ["instruments", "scpi", "plotting", "tools"]
+__all__ = ["instruments", "controllers", "scpi", "plotting", "tools"]
 
 # global loglevel for this module
 LOGLEVEL = 20

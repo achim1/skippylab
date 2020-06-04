@@ -51,5 +51,5 @@ setup(name='skippylab',
       keywords=["oscilloscope", "daq",\
                 "TektronixDPO4104B", "Tektronix",\
                 "readout", "physics", "engineering", "SCPI", "VISA", "vxi11"],
-      packages=['skippylab', 'skippylab.instruments', 'skippylab.scpi']
+      packages=['skippylab', 'skippylab.instruments', 'skippylab.scpi', 'skippylab.controllers']
       )
