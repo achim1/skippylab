@@ -99,7 +99,8 @@ class SunChamber(object):
     
 
     def __init__(self, controller, port=9999,
-                 publish=False, logger=None, loglevel=skippylab.LOGLEVEL):
+                 publish=False, logger=None,\
+                 loglevel=skippylab.LOGLEVEL):
         """
         Open the connection to a SUN EC13 climate chamber via a controller. 
         
@@ -220,10 +221,11 @@ class SunChamber(object):
         status = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.STATUS))
         if nofail:
             while not status:
-                status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=0.5)
+                status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.)
         self.last_status = status
         self.logger.debug('... done.')
         return status
+
 
     def _bit_io_channel_active(self, channel):
         """
@@ -236,7 +238,7 @@ class SunChamber(object):
         self.chamber.write(command)
         command = "I0?"
         resp = self.chamber.query(command)
-        print (resp)
+        logger.debug(f'Recieved response {resp}')
         # FIXME: check which corresponds to actual on/off states
         if float(resp) == 1: # TTL low, input closed
             return False
@@ -301,15 +303,22 @@ class SunChamber(object):
 
     @staticmethod
     def print_status(status): 
-        print ("SUN EC13 chamber reporting status....")
+        logger.info("SUN EC13 chamber reporting status....")
         status = status.rstrip()
         for i,k in enumerate(status):
-                print (SunChamber.status_dict[i][k])
-        print ("----------------------------------")
+                logger.info(f"{SunChamber.status_dict[i][k]}")
+        logger.info("------------DONE----------------------")
     
     def show_status(self):
         status = self.get_status()
         self.print_status(status)
+
+    def get_last_status(self):
+        status_string = ""
+        status = self.last_status.rstrip()
+        for i,k in enumerate(status):
+            status_string += self.status_dict[i][k] + "\n"
+        return status_string
 
     def get_temperature(self, channel=0, timeout = 8):
         """
