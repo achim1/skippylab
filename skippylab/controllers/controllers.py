@@ -127,7 +127,10 @@ class PrologixUsbGPIBController(AbstractBaseController):
         """
 
         try:
-            self.conn = serial.Serial(port=port, stopbits=stopbits, timeout=timeout)    
+            self.conn = serial.Serial(port=port,\
+                                      stopbits=stopbits,\
+                                      timeout=timeout,\
+                                      write_timeout=timeout)    
         except Exception as e:
             self.conn = None
         self.conn.write(f"++addr {gpib_adress}\n".encode())

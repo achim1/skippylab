@@ -131,7 +131,8 @@ class SunChamber(object):
 
         self.last_status = ""
         status = self.get_status()
-        self.print_status(status)
+        self.last_status = status
+        #self.print_status(status)
         if publish:
             self._setup_port()
 
@@ -238,7 +239,7 @@ class SunChamber(object):
         self.chamber.write(command)
         command = "I0?"
         resp = self.chamber.query(command)
-        logger.debug(f'Recieved response {resp}')
+        self.logger.debug(f'Recieved response {resp}')
         # FIXME: check which corresponds to actual on/off states
         if float(resp) == 1: # TTL low, input closed
             return False
@@ -303,11 +304,11 @@ class SunChamber(object):
 
     @staticmethod
     def print_status(status): 
-        logger.info("SUN EC13 chamber reporting status....")
+        print("SUN EC13 chamber reporting status....")
         status = status.rstrip()
         for i,k in enumerate(status):
-                logger.info(f"{SunChamber.status_dict[i][k]}")
-        logger.info("------------DONE----------------------")
+                print(f"{SunChamber.status_dict[i][k]}")
+        print("------------DONE----------------------")
     
     def show_status(self):
         status = self.get_status()
