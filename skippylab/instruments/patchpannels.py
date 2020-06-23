@@ -114,7 +114,11 @@ class Cytec(AbstractBaseInstrument):
         print ('switch 4-7 connects to output 1 of each module')
 
     def raw_latch(self, module, switch):
-        return CytecPatchPannelStatus(self._controller.query('L {} {}'.format(module, switch)))
+        try:
+            status =  CytecPatchPannelStatus(self._controller.query('L {} {}'.format(module, switch)))
+        except:
+            stattus = ""
+        return status
 
     def raw_unlatch(self, module, switch):
         return CytecPatchPannelStatus(self._controller.query('L {} {}'.format(module, switch)))

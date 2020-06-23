@@ -132,6 +132,7 @@ class PrologixUsbGPIBController(AbstractBaseController):
                                       timeout=timeout,\
                                       write_timeout=timeout)    
         except Exception as e:
+            Logger.error(f"Unable to open connection to PROLOGIX Usb GPIB controller! Exception {e}") 
             self.conn = None
         self.conn.write(f"++addr {gpib_adress}\n".encode())
         #self.send_clear_signal()
