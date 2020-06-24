@@ -37,7 +37,7 @@ class CytecPatchPannelStatus(Enum):
     OUTOFLIMIT      = '4' 
     INVALIDACCESS   = '5'
     SETUP_ERR       = '6' 
-    
+    UNKNOWN_STAT    = '-1'    
 
 cppc = CytecPatchPannelCommands
 
@@ -83,7 +83,12 @@ class Cytec(AbstractBaseInstrument):
         return data
 
     def unlatch_all(self):
-        return CytecPatchPannelStatus(self._controller.query(cppc.CLEAR))
+        status = CytecPatchPannelStatus("-1")
+        try:
+            status = CytecPatchPannelStatus(self._controller.query(cppc.CLEAR))
+        except:
+            pass
+        return status
 
     def clear(self):
         return self.unlatch_all()
@@ -114,15 +119,21 @@ class Cytec(AbstractBaseInstrument):
         print ('switch 4-7 connects to output 1 of each module')
 
     def raw_latch(self, module, switch):
+        status = CytecPatchPannelStatus('-1')
         try:
             status =  CytecPatchPannelStatus(self._controller.query('L {} {}'.format(module, switch)))
         except:
-            stattus = ""
+            pass 
         return status
 
     def raw_unlatch(self, module, switch):
-        return CytecPatchPannelStatus(self._controller.query('L {} {}'.format(module, switch)))
-        
+        status = CytecPatchPannelStatus("-1")
+        try:
+            status =  CytecPatchPannelStatus(self._controller.query('L {} {}'.format(module, switch)))
+        except:
+            pass
+        return status        
+
     def latch_all(self):
         for mod in self.MODULES:
             for sw in self.SWITCHES:
