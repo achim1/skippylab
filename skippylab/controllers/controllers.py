@@ -331,6 +331,7 @@ class TelnetController(AbstractBaseController):
                                   responding instruments
 
         """
+        self.socket = None
         if timeout is not None:
             self.socket = telnetlib.Telnet(ip, port, timeout=timeout)
         else:
@@ -339,7 +340,8 @@ class TelnetController(AbstractBaseController):
         self.extra_timeout = extra_timeout
 
     def __del__(self):
-        self.socket.close()
+        if self.socket is not None:
+            self.socket.close()
 
     def read(self):
         data = self.socket.read_very_eager()
