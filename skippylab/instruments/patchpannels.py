@@ -72,6 +72,10 @@ class Cytec(AbstractBaseInstrument):
     def _parse(self, response):
         if self.connection_type == CytecConnectionType.ETHER:
             response = response.replace("\r\n",";")
+            # FIXME: This is most likely a remainder 0 from 
+            # a successful execution, but not sure
+            if response.endswith('0'):
+                response = response[:-1]
         return response
 
     def identify(self):
@@ -109,6 +113,9 @@ class Cytec(AbstractBaseInstrument):
         matrix = self._controller.query(cppc.STATUS)
         matrix = self._parse(matrix)
         matrix = matrix.split(';')
+        # FIXME
+        if matrix[-1] == '':
+            matrix = matrix[:-1]
         return matrix
 
     @property

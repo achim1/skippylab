@@ -319,12 +319,24 @@ class SimpleSocketController(AbstractBaseController):
 
 class TelnetController(AbstractBaseController):
 
-    def __init__(self, ip, port, terminator="\r\n", timeout=None):
+    def __init__(self, ip, port, terminator="\r\n",
+                 timeout=None,
+                 extra_timeout=0):
+        """
+        Open a telnet connection
+
+        Keyword Args:
+            timeout (int)       : Will be passed to telnetlib.Telnet 
+            extra_timeout (int) : Wait extra time in case of slowly 
+                                  responding instruments
+
+        """
         if timeout is not None:
             self.socket = telnetlib.Telnet(ip, port, timeout=timeout)
         else:
             self.socket = telnetlib.Telnet(ip, port)
         self.terminator = terminator
+        self.extra_timeout = extra_timeout
 
     def __del__(self):
         self.socket.close()
@@ -336,7 +348,7 @@ class TelnetController(AbstractBaseController):
 
     def query(self, command):
         self.socket.write("{}\r\n".format(command).encode())
-        sleep(0.5)
+        sleep(self.extra_timeout)
         data = self.socket.read_very_eager()
         #data = self.socket.read_all()
         return data.decode().rstrip(self.terminator)
