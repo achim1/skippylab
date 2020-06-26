@@ -49,15 +49,22 @@ class Cytec(AbstractBaseInstrument):
     SWITCHES = [0,1,2,3,4,5,6,7]
     ROWS     = [[7,3],[6,2],[5,1],[4,0]] # from top to bottom
 
-    def __init__(self, controller, port=9999, publish=False):
-    
+    def __init__(self, controller):
+        """
+        Intitialize a connection to a patch panel from Cytec via a sckippylab.controler
+
+        Args:
+            controller () : Either a Telnet or GPIB controller
+
+        """   
+ 
         #assert (isinstance(controller, NI_GPIB_USB) or isinstance(controller, PrologixUsbGPIBController)), "The use    d controller has to be either the NI usb one or the prologix usb"
     
         self._controller = controller
-        self.publish = publish
-        self.port = port
-        self._socket = None
+        self.connection_type == CytecConnectionType.UNKNOWN
         if (isinstance(controller, SimpleSocketController)): 
+            self.connection_type = CytecConnectionType.ETHER
+        elif (isinstance(controller, TelnetController)): 
             self.connection_type = CytecConnectionType.ETHER
         else:
             self.connection_type = CytecConnectionType.GPIB 
@@ -66,7 +73,6 @@ class Cytec(AbstractBaseInstrument):
         if self.connection_type == CytecConnectionType.ETHER:
             response = response.replace("\r\n",";")
         return response
-
 
     def identify(self):
         return self._controller.query(cppc.IDN)

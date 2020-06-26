@@ -43,8 +43,6 @@ class AbstractBaseController(metaclass=abc.ABCMeta):
     def read(self):
         raise NotImplementedError("Plain read is not implemented for this instrument, only 'query' and 'write'")
 
-    def query_with_timeout(self, question):
-        return self.query(question)
 
 class DirectUSBController(AbstractBaseController):
     """
@@ -121,8 +119,9 @@ class PrologixUsbGPIBController(AbstractBaseController):
             gpib_address (int) : GPIB address of the target device. The GPIB controller
                                  can handle up to 15 addresses, but only one 
                                  at a time
-            timeout (int)      : timeout in seconds. If None, wait forever. Otherwise
-                                 return without establishing a connection.
+            timeout (int)      : Additional timeout in seconds. Sometimes a small timeout 
+                                 might help if the controller is not patient enough when 
+                                 waiting for a response.
 
         """
 
@@ -134,6 +133,11 @@ class PrologixUsbGPIBController(AbstractBaseController):
         except Exception as e:
             Logger.error(f"Unable to open connection to PROLOGIX Usb GPIB controller! Exception {e}") 
             self.conn = None
+        if self.timeout is None:
+            self.timeout = 0
+        else:
+            self.timeout = timeout
+
         self.conn.write(f"++addr {gpib_adress}\n".encode())
         #self.send_clear_signal()
         self.conn.write("++eos 0\n".encode())
@@ -146,6 +150,17 @@ class PrologixUsbGPIBController(AbstractBaseController):
         """
         if self.conn is not None:
             self.conn.close()
+
+    def set_gpib_address(self, gpib_address):
+        """
+        Set a gpib_address. The controller can control up to 16 instruments,
+        identified by an integer 0-15, which is called 'gpib_address'
+
+        Args:
+            gpib_adress (int) : 0-15 address, have to be the same as set on the
+                                respective instrument
+        """
+        self.conn.write(f"++addr {gpib_address}\n".encode())
 
     def send_clear_signal(self):
         """
@@ -161,20 +176,30 @@ class PrologixUsbGPIBController(AbstractBaseController):
         self.conn.write("++rst\n".encode())
         sleep(5)
 
-    def query(self, command, timeout=0.3):
+    def query(self, command):
+        """
+        Send a command through the GPIB controller to the connected
+        instrument at gpib_address and wait for a response.
+        
+        Args:
+            command (str) : Command for the connected instrument
+        """
         self.conn.write(f"{command}\n\n".encode())
-        sleep(0.3) 
+        sleep(self.timeout) 
         resp = self.conn.read_all()
         return resp.decode().rstrip("\n")
     
-    def query_with_timeout(self, command, timeout=0):
-        return self.query(command, timeout=timeout)
-
     def write(self, command):
+        """
+        Send a command through the GPIB controller to the connected
+        instrument at gpib_address. Return immediately, since no 
+        response is expected.
+
+        Args:
+            command (str) : Command for the connected instrument
+        """
         self.conn.write(f"{command}\n\n".encode())
         return None
-
-
 
 
 class GPIOController(AbstractBaseController):
