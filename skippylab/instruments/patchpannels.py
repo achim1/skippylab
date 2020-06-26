@@ -61,7 +61,7 @@ class Cytec(AbstractBaseInstrument):
         #assert (isinstance(controller, NI_GPIB_USB) or isinstance(controller, PrologixUsbGPIBController)), "The use    d controller has to be either the NI usb one or the prologix usb"
     
         self._controller = controller
-        self.connection_type == CytecConnectionType.UNKNOWN
+        self.connection_type = CytecConnectionType.UNKNOWN
         if (isinstance(controller, SimpleSocketController)): 
             self.connection_type = CytecConnectionType.ETHER
         elif (isinstance(controller, TelnetController)): 
