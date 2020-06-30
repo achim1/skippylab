@@ -222,7 +222,7 @@ class SunChamber(object):
         status = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.STATUS))
         if nofail:
             while not status:
-                status = self.chamber.query_with_timeout(SUNEC13Commands.querify(SUNEC13Commands.STATUS), timeout=1.)
+                status = self.chamber.query(SUNEC13Commands.querify(SUNEC13Commands.STATUS))
         self.last_status = status
         self.logger.debug('... done.')
         return status
